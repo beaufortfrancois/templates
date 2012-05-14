@@ -14,13 +14,23 @@ A template is rendered by passing it JSON data. I say "JSON" but what I really m
 
 Generally speaking there are two classes of mustaches: "self closing" ones like `{{foo}}` `{{{foo}}}` `{{*foo}}`, and "has children" ones like `{{#foo}}...{{/foo}}` `{{?foo}}...{{/foo}}` `{{^foo}}...{{/foo}}` where the `...` is arbitrary other template data.
 
-In both cases the `foo` represents a path into the JSON structure, so `{{foo.bar.baz}}` is valid for JSON like `{"foo": {"bar": {"baz": 42 }}}` (here it would resolve to 42).
+In both cases the `foo` represents a path into the JSON structure, so
+    {{foo.bar.baz}}
+is valid for JSON like
+    {"foo": {"bar": {"baz": 42 }}}
+(here it would resolve to `42`).
 
-All libraries also have the behaviour where descending into a section of the JSON will "push" the sub-JSON onto the top of the "context stack", so given JSON like `{"foo": {"bar": {"foo": 42 }}}`, the template `{{foo.bar.foo}} {{?foo}}{{bar.foo}} {{?bar}{{foo}}{{/bar}} {{/foo}}` will correctly resolve all references to be `42`.
+All libraries also have the behaviour where descending into a section of the JSON will "push" the sub-JSON onto the top of the "context stack", so given JSON like
+    {"foo": {"bar": {"foo": 42 }}}
+the template
+    {{foo.bar.foo}} {{?foo}}{{bar.foo}} {{?bar}{{foo}}{{/bar}} {{/foo}}
+will correctly resolve all references to be `42`.
 
 There is an additional identifier `@` representing the "tip" of that context stack, useful when iterating using the `{{#foo}}...{{/foo}}` structure; `{ "list": [1,2,3] }` with `{{#list}} {{@}} {{/list}}` will print ` 1  2  3 `.
 
 Finally, note that the `{{/foo}}` in `{{#foo}}...{{/foo}}` is actually redundant, and that `{{#foo}}...{{/}}` would be sufficient. Depdencing on the situation one or the other will tend to be more readable (explicitly using `{{/foo}}` will perform more validation).
+
+## Structures ("mustaches")
 
 ### `{{foo.bar}}`
 
@@ -32,7 +42,7 @@ Prints out value at path `foo.bar` (no escaping).
 
 ### `{{*foo.bar}}}`
 
-Prints out the JSON serialization of the object at path `foo.bar`.
+Prints out the JSON serialization of the object at path `foo.bar` (no escaping; this is designed for JavaScript client bootstrapping).
 
 ### `{{+foo.bar}}`
 
@@ -79,4 +89,4 @@ Ooh a switch statement! Prints `...` if the string found at `foo.bar` is the str
 
 But at the moment this is currently under heavy weekend development. Which is to say a constant trickle of code as I need it.
 
-Soon: comments, tidier syntax, less whitespacey output, and moving the Java and JavaScript/CoffeeScript implementations and tests into this repository!
+Soon: comments, tidier syntax, less whitespacey output, and moving the Java and JavaScript/CoffeeScript implementations and tests into this repository! And maybe some kind of online playground at some point.
