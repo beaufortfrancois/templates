@@ -1,0 +1,7 @@
+Here are a number of options:
+{{:foo.type}}
+{{=one}}one two
+{{=two}}three four
+{{=three}}five six
+{{/}}
+End of options.

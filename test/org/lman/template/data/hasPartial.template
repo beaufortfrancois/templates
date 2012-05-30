@@ -1,0 +1,2 @@
+a-{{+templates.hasPartial_partial}}
+b-{{+templates.hasPartial_partial}}

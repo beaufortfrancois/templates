@@ -1,0 +1,8 @@
+{{one.foo.foo}}
+{{one.foo.bar}}
+{{one.bar.foo}}
+{{one.bar.bar}}
+{{two.foo.foo}}
+{{two.foo.bar}}
+{{two.bar.foo}}
+{{two.bar.bar}}

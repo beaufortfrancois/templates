@@ -1,0 +1,5 @@
+hello
+{{?foo}}foo{{/foo}}
+{{?bar}}bar{{/bar}}
+{{?baz}}baz{{/baz}}
+world

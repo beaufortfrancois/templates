@@ -1,0 +1,13 @@
+foo {{- comment -}} bar
+baz {{-
+I am a
+multi-line
+comment
+-}}
+quux {{- Here are
+some {{control.characters}}
+inside a comment -}}
+{{control.characters}}
+unicorn
+{{- and a {{- nested {{- nested -}} comment -}} and {{control.characters}}
+and another {{- nested comment -}} and finally -}}

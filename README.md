@@ -1,10 +1,10 @@
-# Trendy templates
+# Handlebar templates
 
-This repository contains utilities around a templating system that I've been calling "trendy templates". They're a logic-less templating language based on [mustache](http://mustache.github.com/) which is itself based on [ctemplate](http://code.google.com/p/ctemplate) apparently.
+This repository contains utilities around a templating system that I called "Handlebar". They're a logic-less templating language based on [mustache](http://mustache.github.com/) (obviously) which is itself based on [ctemplate](http://code.google.com/p/ctemplate) apparently.
 
 The original and reference implementation is written in Java, with a JavaScript (via CoffeeScript) port and a Python port. The tests are cross-platform but controlled from Java with junit; this means that all implementations are hopefully up to date (or else some tests are failing).
 
-The goal of trendy templates is to provide the most complete and convenient way to write logic-less templates across the whole stack of a web application. Write templates once, statically render content on the Java/Python server, then as content is dynamically added render it using the same templates on the JavaScript client.
+The goal of handlebar is to provide the most complete and convenient way to write logic-less templates across the whole stack of a web application. Write templates once, statically render content on the Java/Python server, then as content is dynamically added render it using the same templates on the JavaScript client.
 
 ## Overview
 
@@ -56,8 +56,8 @@ Prints out the JSON serialization of the object at path `foo.bar` (no escaping; 
 
 Inserts the sub-template (aka "partial template") found at path `foo.bar`. Currently, all libraries actually enforce that this is a pre-compiled template (rather than a plain string for example) for efficiency. This lets you do something like:
 
-    template = TrendyTemplate('{{#list}} {{+partial}} {{/}}')
-    partial = TrendyTemplate('{{foo}}...')
+    template = Handlebar('{{#list}} {{+partial}} {{/}}')
+    partial = Handlebar('{{foo}}...')
     json = {
       'list': [
         { 'foo': 42 },

@@ -1,0 +1,3 @@
+{{baz}} -
+{{#flats1}} foo: {{foo}}, bar: {{bar}};{{/flats1}} -
+{{#flats2}} foo: {{foo}}, bar: {{bar}};{{/flats2}}

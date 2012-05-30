@@ -1,11 +1,11 @@
 # Copyright 2012 Benjamin Kalman
-# 
+#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
-# 
+#
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -19,9 +19,9 @@ import re
 specifically mustache templates) then taken in their own direction because I
 found those to be inadequate.
 
-from trendy_template import TrendyTemplate
+from handlebar import Handlebar
 
-template = TrendyTemplate('hello {{#foo}}{{bar}}{{/}} world')
+template = Handlebar('hello {{#foo}}{{bar}}{{/}} world')
 input = {
   'foo': [
     { 'bar': 1 },
@@ -218,8 +218,8 @@ class PartialNode(SelfClosingNode):
   """
   def render(self, buf, contexts, errors):
     value = self.id.resolve(contexts, errors)
-    if not isinstance(value, TrendyTemplate):
-      _RenderError(errors, id, " didn't resolve to a TrendyTemplate")
+    if not isinstance(value, Handlebar):
+      _RenderError(errors, id, " didn't resolve to a Handlebar")
       return
     _RenderNodes(buf, value.nodes, contexts, errors)
 
@@ -346,7 +346,7 @@ def _CreateIdentifier(path):
   else:
     return PathIdentifier(path)
 
-class TrendyTemplate(object):
+class Handlebar(object):
   """ A trendy template.
   """
   def __init__(self, template):
