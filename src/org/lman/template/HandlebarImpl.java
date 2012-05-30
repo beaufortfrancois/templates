@@ -25,7 +25,7 @@ import org.lman.json.JsonView;
 import org.lman.json.JsonView.ArrayVisitor;
 
 /**
- * A "trendy" template; a mustache-template-themed template language with a few additional features:
+ * A "handlebar" template; a mustache-themed template language with a few additional features:
  *   * {{foo.bar}} directly works for object dereferencing.
  *   * The semantics of {{#foo}} has been tightened to just lists, maps, and objects; where {{#foo}}
  *     for an object or map means to promote its members to the current namespace.

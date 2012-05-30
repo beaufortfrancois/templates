@@ -15,7 +15,7 @@
 import json
 import re
 
-""" "Trendy templates" are logicless templates inspired by ctemplate (or more
+""" Handlebar templates are logicless templates inspired by ctemplate (or more
 specifically mustache templates) then taken in their own direction because I
 found those to be inadequate.
 
@@ -347,7 +347,7 @@ def _CreateIdentifier(path):
     return PathIdentifier(path)
 
 class Handlebar(object):
-  """ A trendy template.
+  """ A handlebar template.
   """
   def __init__(self, template):
     self.nodes = []
