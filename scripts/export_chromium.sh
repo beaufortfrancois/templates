@@ -23,4 +23,10 @@ fi
 
 target="$chromium/third_party/handlebar"
 mkdir -p "$target"
+
+cp LICENSE "$target"
+cp README.md "$target"
 cp python/handlebar.py "$target"
+
+# TODO: generate a README.chromium
+# TODO: copy over .gitignore
