@@ -24,8 +24,9 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 import org.junit.Test;
-import org.lman.common.TypeParameter;
 import org.lman.common.Struct;
+import org.lman.common.Transient;
+import org.lman.common.TypeParameter;
 
 public class JsonConverterTest {
 
@@ -352,18 +353,19 @@ public class JsonConverterTest {
     assertEquals(new Empty(), JsonConverter.fromJson("{}", Empty.class));
   }
 
-  protected static class HasTransientField extends Struct {
+  public static class HasTransientField extends Struct {
     public String field1;
 
-    //@Transient
+    @Transient
     public String field2;
 
     public HasTransientField(String field1, String field2) {
       this.field1 = field1;
       this.field2 = field2;
     }
-}
+  }
 
+  @Test
   public void transientField() throws JSONException {
     HasTransientField test = new HasTransientField("foo", "bar");
     JSONObject actual = new JSONObject(JsonConverter.toJson(test));

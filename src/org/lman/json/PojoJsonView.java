@@ -23,6 +23,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.lman.common.Transient;
+
 /**
  * A JSON view over an immutable Java object.
  *
@@ -38,7 +40,7 @@ public class PojoJsonView implements JsonView {
   // TODO: limit the size of this cache.
   private Map<String, JsonView> foundViaGet = null;
 
-  private final boolean isTransient = false;
+  private boolean isTransient = false;
 
   // Lazily-created cache of not-found keys via get().
   // TODO: why does this make things run slower?
@@ -50,11 +52,11 @@ public class PojoJsonView implements JsonView {
 
   public PojoJsonView(Object pojo, Annotation[] annotations) {
     this.pojo = pojo;
-//    for (Annotation annotation : annotations) {
-//      if (annotation instanceof Transient) {
-//        this.isTransient = true;
-//      }
-//    }
+    for (Annotation annotation : annotations) {
+      if (annotation instanceof Transient) {
+        this.isTransient = true;
+      }
+    }
   }
 
   @Override
