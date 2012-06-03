@@ -45,6 +45,8 @@ public abstract class Struct {
     for (Field f : getClass().getFields()) {
       if (Modifier.isStatic(f.getModifiers()))
         continue;
+      if (f.getAnnotation(Transient.class) != null)
+        continue;
 
       Object thisField = f.get(this);
       Object otherField = f.get(other);
@@ -78,6 +80,8 @@ public abstract class Struct {
     int prime = 31, result = 1;
     for (Field f : getClass().getFields()) {
       if (Modifier.isStatic(f.getModifiers()))
+        continue;
+      if (f.getAnnotation(Transient.class) != null)
         continue;
 
       Object thisField = f.get(this);
