@@ -28,7 +28,6 @@ import org.junit.Test;
 
 /**
  * Runs all test cases found in the "data" directory.
- *
  */
 public abstract class AbstractHandlebarTest {
 

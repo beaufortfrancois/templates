@@ -39,17 +39,25 @@ import org.lman.json.JsonView.ArrayVisitor;
  *     included as part of the model.
  *   * Supports a switch statement {{:condition}}{{=case1}} {{=case2}} {{/condition}}
  *   * You can use {{@}} to refer to the current item of a list while iterating.
- *   * Lines that are just control statements don't have their extra whitespace renderered; this
- *     generates neater code.
- *   * {@link HandlebarImpl#render} is a varags method allowing the namespace of multiple 
+ *   * {@link HandlebarImpl#render} is a varags method allowing the namespace of multiple
  *     objects to be in the top namespace at once.
- *   * It is fully serializable to JSON using {@link JsonConverter}, with the intention of sending
- *     down pre-parsed templates as JSON rather than the client doing its own parsing.
+ *   * There's a handy {{*}} JSON serialisation operator, great for bootstrapping JavaScript.
  *
  * Note that it's written in a bit of a crazy way (i.e. highly "object based" and reflective) to
  * make it easier to port to Javascript/Coffeescript.
  */
-// TODO: a special tag to render errors in.
+// TODO: comments on all platforms
+// TODO: a special tag to render errors in with a standard syntax (test for it).
+//       make sure that it doesn't have any non-alphanumeric or -_ characters so that it can be
+//       safely embedded inside comments (multi-line comments, anyway).
+// TODO: blank lines
+// TODO: inherit indentation
+// TODO: line number errors (above three all related)
+// TODO: ? and # only put on @; need to do @.@.@ if you really want to go back?
+// TODO: partial inclusion promotes the top-level @ to the top-level namespace.
+// TODO: {{|}} to mean "else".
+// TODO: only maintain the top-level context in partials, or allow a custom top-level context to
+//       be specified.
 public final class HandlebarImpl extends Handlebar {
 
   private interface Identifier {
@@ -364,7 +372,6 @@ public final class HandlebarImpl extends Handlebar {
       OPEN_START_SWITCH          ("{{:", SwitchNode.class),
       OPEN_CASE                  ("{{=", CaseNode.class),
       OPEN_END_SECTION           ("{{/", null),
-      // TODO: erm {{{ }}} is dumb, the closing }}} is unusual, maybe {{!}} for unescaping?
       OPEN_UNESCAPED_VARIABLE    ("{{{", UnescapedVariableNode.class),
       CLOSE_MUSTACHE3            ("}}}", null),
       OPEN_COMMENT               ("{{-", null),
@@ -495,7 +502,7 @@ public final class HandlebarImpl extends Handlebar {
           }
           break;
         }
-        
+
         case OPEN_COMMENT:
           openComment(tokens);
           break;
@@ -545,11 +552,11 @@ public final class HandlebarImpl extends Handlebar {
       }
     }
   }
-  
+
   private void openComment(TokenStream tokens) {
     tokens.advanceOver(TokenStream.Token.OPEN_COMMENT);
     while (tokens.nextToken != TokenStream.Token.CLOSE_COMMENT) {
-      if (tokens.nextToken == TokenStream.Token.OPEN_COMMENT) 
+      if (tokens.nextToken == TokenStream.Token.OPEN_COMMENT)
         openComment(tokens);
       else
         tokens.advance();
