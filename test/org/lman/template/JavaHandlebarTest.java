@@ -43,9 +43,9 @@ public class JavaHandlebarTest extends AbstractHandlebarTest {
     for (File partialTemplateFile : partialTemplateFiles) {
       partialTemplates.put(
           getTemplateName(partialTemplateFile),
-          new HandlebarImpl(getContents(partialTemplateFile)));
+          new Handlebar(getContents(partialTemplateFile)));
     }
-    return new HandlebarImpl(getContents(templateFile)).render(
+    return new Handlebar(getContents(templateFile)).render(
         getJson(jsonFile), new Templates(partialTemplates)).text;
   }
 

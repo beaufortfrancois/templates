@@ -47,8 +47,8 @@ public class ParseExceptionHandlebarTest {
 
   private static void expectParseException(String template) {
     try {
-      new HandlebarImpl(template);
+      new Handlebar(template);
       fail();
-    } catch (HandlebarImpl.ParseException expected) {}
+    } catch (Handlebar.ParseException expected) {}
   }
 }
