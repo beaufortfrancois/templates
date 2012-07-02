@@ -36,6 +36,6 @@ for partialPath in argv[3:]:
   partialName = partialName[:len(partialName) - len('.template')]
   partials[partialName] = Handlebar(readFile(partialPath))
 
-renderResult = template.render(json, { 'templates': partials })
+renderResult = template.render(json, { 'partials': partials })
 sys.stdout.write(renderResult.text)
 sys.stderr.write('\n'.join(renderResult.errors))

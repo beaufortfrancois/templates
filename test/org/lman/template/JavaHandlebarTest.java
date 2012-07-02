@@ -29,10 +29,10 @@ import org.lman.template.Handlebar.ParseException;
 public class JavaHandlebarTest extends AbstractHandlebarTest {
 
   public static class Templates {
-    public final Map<String, Handlebar> templates;
+    public final Map<String, Handlebar> partials;
 
-    public Templates(Map<String, Handlebar> templates) {
-      this.templates = templates;
+    public Templates(Map<String, Handlebar> partials) {
+      this.partials = partials;
     }
   }
 

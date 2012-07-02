@@ -1,0 +1,19 @@
+1. Partials should inherit the initial/global state of contexts:
+2. Partials should either inherit the topmost-only local context,
+   or some explicit context given by arguments.
+
+ no args: {{+partials.partialInheritance_p1}}
+arg:arg1: {{+partials.partialInheritance_p1 arg:arg1}}
+arg:arg2: {{+partials.partialInheritance_p1 arg:arg2}}
+
+{{#deep}}
+ no args: {{+partials.partialInheritance_p1}}
+arg:arg1: {{+partials.partialInheritance_p1 arg:arg1}}
+arg:arg2: {{+partials.partialInheritance_p1 arg:arg2}}
+
+{{#moreDeep}}
+ no args: {{+partials.partialInheritance_p1}}
+arg:arg1: {{+partials.partialInheritance_p1 arg:arg1}}
+arg:arg2: {{+partials.partialInheritance_p1 arg:arg2}}
+{{/moreDeep}}
+{{/deep}}

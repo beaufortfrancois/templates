@@ -1,0 +1,49 @@
+Give me a one two three.
+{{#list1}}
+  {{@}}
+{{/}}
+  Give me a four five six.
+  {{#list2}}
+    {{@}}
+  {{/}}
+
+Give me a {{#list3}}{{@}}{{/}} (seven eight nine).
+  Give me a {{#list4}}{{@}}{{/}} (TEN!).
+
+Give me an abc.
+{{#list5}}
+  {{*@}}
+  {{@.value}}
+  {{value}}
+{{/}}
+  Give me an abc.
+  {{#list5}}
+    {{*@}}
+    {{@.value}}
+    {{value}}
+  {{/}}
+
+Should render blank lines between each of these:
+{{#list1}}
+  {{@}}
+
+{{/}}
+  {{#list1}}
+    {{@}}
+
+  {{/}}
+
+Should render each inline:
+{{#list1}}{{@}}{{/}}
+  {{#list2}}{{@}}{{/}}
+
+Nothing to see here.
+{{#nothing1}}
+  Seriously, nothing to see here.
+{{/}}
+
+Nothing to see here either.
+{{#nothing2}}Foo{{/}}
+  {{#nothing3}}Bar{{/}}
+
+Done!

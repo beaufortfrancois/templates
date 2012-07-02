@@ -1,0 +1,15 @@
+1. Partials should inherit the initial/global state of contexts:
+2. Partials should either inherit the topmost-only local context,
+   or some explicit context given by arguments.
+
+ no args: foo.bar:baz, arg.qux:, arg1.qux:10, arg2.qux:20, arg3.qux:30, arg4.qux:, arg5.qux:.
+arg:arg1: foo.bar:baz, arg.qux:10, arg1.qux:10, arg2.qux:20, arg3.qux:30, arg4.qux:, arg5.qux:.
+arg:arg2: foo.bar:baz, arg.qux:20, arg1.qux:10, arg2.qux:20, arg3.qux:30, arg4.qux:, arg5.qux:.
+
+ no args: foo.bar:baz, arg.qux:, arg1.qux:10, arg2.qux:40, arg3.qux:50, arg4.qux:60, arg5.qux:.
+arg:arg1: foo.bar:baz, arg.qux:10, arg1.qux:10, arg2.qux:40, arg3.qux:50, arg4.qux:60, arg5.qux:.
+arg:arg2: foo.bar:baz, arg.qux:40, arg1.qux:10, arg2.qux:40, arg3.qux:50, arg4.qux:60, arg5.qux:.
+
+ no args: foo.bar:baz, arg.qux:, arg1.qux:10, arg2.qux:20, arg3.qux:70, arg4.qux:80, arg5.qux:90.
+arg:arg1: foo.bar:baz, arg.qux:10, arg1.qux:10, arg2.qux:20, arg3.qux:70, arg4.qux:80, arg5.qux:90.
+arg:arg2: foo.bar:baz, arg.qux:40, arg1.qux:10, arg2.qux:20, arg3.qux:70, arg4.qux:80, arg5.qux:90.

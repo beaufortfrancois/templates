@@ -67,14 +67,8 @@ public abstract class AbstractHandlebarTest {
       this.expected = getContents(new File(dataParent + base + suffix + EXPECTED_EXT));
     }
 
-    public void run() {
-      String rendered = "";
-      try {
-        rendered = render(jsonFile, templateFile, partialTemplateFiles);
-      } catch (Exception e) {
-        Assert.fail(e.getMessage());
-      }
-      Assert.assertEquals(expected, rendered);
+    public void run() throws Exception {
+      Assert.assertEquals(expected, render(jsonFile, templateFile, partialTemplateFiles));
     }
   }
 
@@ -106,16 +100,6 @@ public abstract class AbstractHandlebarTest {
   @Test
   public void identity() {
     test("identity");
-  }
-
-  @Test
-  public void switch_0() {
-    test("switch_0");
-  }
-
-  @Test
-  public void switch_1() {
-    test("switch_1");
   }
 
   @Test
@@ -221,6 +205,21 @@ public abstract class AbstractHandlebarTest {
   @Test
   public void comment() {
     test("comment");
+  }
+
+  @Test
+  public void cleanRendering() {
+    test("cleanRendering");
+  }
+
+  @Test
+  public void cleanPartials() {
+    test("cleanPartials", "cleanPartials_p1");
+  }
+
+  @Test
+  public void partialInheritance() {
+    test("partialInheritance", "partialInheritance_p1");
   }
 
 }

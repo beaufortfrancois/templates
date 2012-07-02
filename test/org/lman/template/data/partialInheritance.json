@@ -1,0 +1,16 @@
+{
+  "foo": {"bar": "baz"},
+  "arg1": {"qux": 10},
+  "arg2": {"qux": 20},
+  "arg3": {"qux": 30},
+  "deep": {
+    "arg2": {"qux": 40},
+    "arg3": {"qux": 50},
+    "arg4": {"qux": 60},
+    "moreDeep": {
+      "arg3": {"qux": 70},
+      "arg4": {"qux": 80},
+      "arg5": {"qux": 90}
+    }
+  }
+}

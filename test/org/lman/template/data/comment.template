@@ -1,3 +1,4 @@
+{{- Single-line comment -}}
 foo {{- comment -}} bar
 baz {{-
 I am a

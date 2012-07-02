@@ -1,0 +1,7 @@
+foo.bar:{{foo.bar}}, 
+arg.qux:{{arg.qux}}, 
+arg1.qux:{{arg1.qux}}, 
+arg2.qux:{{arg2.qux}}, 
+arg3.qux:{{arg3.qux}}, 
+arg4.qux:{{arg4.qux}}, 
+arg5.qux:{{arg5.qux}}.

@@ -1,2 +1,2 @@
-a-{{#one}}{{+templates.deepPartials_partial}}{{/}}
-b-{{#two}}{{+templates.deepPartials_partial}}{{/}}
+a-{{#one}}{{+partials.deepPartials_partial foo:foo bar:bar}}{{/}}
+b-{{#two}}{{+partials.deepPartials_partial foo:foo bar:bar}}{{/}}

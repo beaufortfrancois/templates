@@ -1,0 +1,30 @@
+Inline partials should get squashed down: One  TwoThree.
+
+The same partial on its own line shouldn't get squashed down:
+One
+  Two
+Three
+(and shouldn't add any new lines before or after).
+
+Partials should be indented on the level that they're included:
+  One
+    Two
+  Three
+(still no newlines).
+
+These should all be single lines; too hard to do it otherwise.
+This is more consistent too.
+One  TwoThree
+  One  TwoThree
+
+a One  TwoThree
+  a One  TwoThree
+
+One  TwoThreeOne  TwoThreeOne  TwoThree
+  One  TwoThreeOne  TwoThreeOne  TwoThree
+
+a One  TwoThreea One  TwoThreea One  TwoThree
+  a One  TwoThreea One  TwoThreea One  TwoThree
+
+One  TwoThreeOne  TwoThreeOne  TwoThree
+  One  TwoThreeOne  TwoThreeOne  TwoThree

@@ -1,1 +1,15 @@
-Here are the numbers in order: hello 1 hello 3 hello 2
+Here are the numbers in order:
+  hello
+  1
+  hello
+  3
+  hello
+  2
+
+Now for objects:
+  {"foo":"a"}
+  a
+  {"foo":"b"}
+  b
+  {"foo":"c"}
+  c

@@ -133,13 +133,15 @@ public class PojoJsonView implements JsonView {
     checkIsType(Type.ARRAY);
     if (pojo.getClass().isArray()) {
       Object[] array = (Object[]) pojo;
-      for (int i = 0; i < array.length; i++)
-        visitor.visit(new PojoJsonView(array[i]), i);
+      for (int i = 0; i < array.length; i++) {
+        Object value = array[i];
+        visitor.visit(value instanceof JsonView ? (JsonView) value : new PojoJsonView(value), i);
+      }
     } else if (Collection.class.isAssignableFrom(pojo.getClass())) {
       Collection<?> collection = (Collection<?>) pojo;
       int i = 0;
       for (Object value : collection)
-        visitor.visit(new PojoJsonView(value), i++);
+        visitor.visit(value instanceof JsonView ? (JsonView) value : new PojoJsonView(value), i++);
     } else {
       throw new AssertionError();
     }
@@ -169,15 +171,21 @@ public class PojoJsonView implements JsonView {
       for (Map.Entry<?, ?> entry : map.entrySet()) {
         if (!String.class.isAssignableFrom(entry.getKey().getClass()))
           throw new UnsupportedOperationException("Illegal key type: " + entry.getKey().getClass());
-        visitor.visit((String) entry.getKey(), new PojoJsonView(entry.getValue()));
+        Object value = entry.getValue();
+        visitor.visit(
+            (String) entry.getKey(),
+            value instanceof JsonView ? (JsonView) value : new PojoJsonView(value));
       }
     } else {
       for (Field field : pojo.getClass().getFields()) {
         if (Modifier.isStatic(field.getModifiers()))
           continue;
         try {
-          PojoJsonView fieldView = new PojoJsonView(field.get(pojo), field.getAnnotations());
-          visitor.visit(field.getName(), fieldView);
+          Object value = field.get(pojo);
+          visitor.visit(
+              field.getName(),
+              value instanceof JsonView ?
+                  (JsonView) value : new PojoJsonView(value, field.getAnnotations()));
         } catch (IllegalAccessException e) {
           throw new UnsupportedOperationException(e);
         }
@@ -219,8 +227,10 @@ public class PojoJsonView implements JsonView {
     Object result = pojo;
 
     for (String next : path) {
-      if (Map.class.isAssignableFrom(result.getClass())) {
-        result = ((Map<?, ?>) result).get(next.toString());
+      if (result instanceof JsonView) {
+        result = ((JsonView) result).get(next);
+      } else if (Map.class.isAssignableFrom(result.getClass())) {
+        result = ((Map<?, ?>) result).get(next);
       } else {
         try {
           result = result.getClass().getField(next.toString()).get(result);
@@ -234,7 +244,7 @@ public class PojoJsonView implements JsonView {
         return null;
     }
 
-    return new PojoJsonView(result);
+    return result instanceof JsonView ? (JsonView) result : new PojoJsonView(result);
   }
 
   private void checkIsType(Type t) {

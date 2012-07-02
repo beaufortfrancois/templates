@@ -1,1 +1,11 @@
-Here are the numbers in order:{{#list}} {{string}} {{@}}{{/}}
+Here are the numbers in order:
+{{#list}}
+  {{string}}
+  {{@}}
+{{/}}
+
+Now for objects:
+{{#objectList}}
+  {{*@}}
+  {{@.foo}}
+{{/}}

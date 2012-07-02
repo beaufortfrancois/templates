@@ -40,7 +40,6 @@ import org.lman.json.PojoJsonView;
  *   * {{+foo}} replaces {{>}} (it's bad with HTML syntax highlighting), and can specifically (in
  *     fact, only; for efficiency purposes) render other {@link HandlebarImpl}s if they're
  *     included as part of the model.
- *   * Supports a switch statement {{:condition}}{{=case1}} {{=case2}} {{/condition}}
  *   * You can use {{@}} to refer to the current item of a list while iterating.
  *   * {@link HandlebarImpl#render} is a varags method allowing the namespace of multiple
  *     objects to be in the top namespace at once.
@@ -49,19 +48,20 @@ import org.lman.json.PojoJsonView;
  * Note that it's written in a bit of a crazy way (i.e. highly "object based" and reflective) to
  * make it easier to port to Javascript/Coffeescript.
  */
-// TODO: comments on all platforms
-// TODO: a special tag to render errors in with a standard syntax (test for it).
-//       make sure that it doesn't have any non-alphanumeric or -_ characters so that it can be
-//       safely embedded inside comments (multi-line comments, anyway).
-// TODO: blank lines
-// TODO: inherit indentation
-// TODO: line number errors (above three all related)
-// TODO: ? and # only put on @; need to do @.@.@ if you really want to go back?
-// TODO: partial inclusion promotes the top-level @ to the top-level namespace.
-// TODO: {{|}} to mean "else".
-// TODO: only maintain the top-level context in partials, or allow a custom top-level context to
-//       be specified.
+// TODO: comments on all platforms.
+// TODO: {{|}} or {{-}} to mean "else".
+// TODO: experiment with ensureCapacity when calling Node#render.
 public class Handlebar {
+
+  /**
+   * Thrown if parsing {@link Handlebar#source} fails.
+   */
+  public static class ParseException extends RuntimeException {
+    public ParseException(String error, Line line) {
+      // TODO: add template filename here too.
+      super(error + " (line " + line.number + ")");
+    }
+  }
 
   /**
    * Return value from {@link Handlebar#render}.
@@ -77,143 +77,396 @@ public class Handlebar {
   }
 
   /**
-   * Thrown if parsing {@link Handlebar#source} fails.
+   * The state of a {@link #render} call.
    */
-  public static class ParseException extends RuntimeException {
-    public ParseException(String error) {
-      super(error);
+  private static class RenderState {
+    public final Deque<JsonView> globalContexts;
+    public final Deque<JsonView> localContexts;
+    public final StringBuilder text = new StringBuilder();
+    public final List<String> errors = new ArrayList<String>();
+
+    private boolean errorsDisabled = false;
+
+    public RenderState(Deque<JsonView> globalContexts, Deque<JsonView> localContexts) {
+      this.globalContexts = globalContexts;
+      this.localContexts = localContexts;
+    }
+
+    public RenderState inSameContext() {
+      return new RenderState(globalContexts, localContexts);
+    }
+
+    public JsonView getFirstContext() {
+      return localContexts.isEmpty() ? globalContexts.getFirst() : localContexts.getFirst();
+    }
+
+    public RenderState disableErrors() {
+      errorsDisabled = true;
+      return this;
+    }
+
+    public RenderState addError(Object... messages) {
+      if (errorsDisabled)
+        return this;
+      StringBuilder buf = new StringBuilder();
+      for (Object message : messages)
+        buf.append(message);
+      errors.add(buf.toString());
+      return this;
+    }
+
+    public RenderResult getResult() {
+      return new RenderResult(text.toString(), errors);
     }
   }
 
-  private interface Identifier {
-    String THIS_IDENTIFIER = "@";
-
-    JsonView resolve(Deque<JsonView> contexts, List<String> errors);
-  }
-
-  private static class PathIdentifier implements Identifier {
+  /**
+   * An identifier of the form either just '@' to refer to the head of the context, or
+   * foo.bar.baz, with an optional '@.' in the front.
+   */
+  private static class Identifier {
+    private final boolean isThis;
+    private final boolean startsWithThis;
     private final String path;
 
-    public PathIdentifier(String path) {
-      if (path.isEmpty())
-        throw new ParseException("Cannot have empty identifiers");
-      if (!path.matches("^[a-zA-Z0-9._]*$"))
-        throw new ParseException(path + " is not a valid identifier");
+    public Identifier(String path, Line line) {
+      isThis = path.equals("@");
+      if (isThis) {
+        this.startsWithThis = false;
+        this.path = "";
+        return;
+      }
+
+      String thisDot = "@.";
+      startsWithThis = path.startsWith(thisDot);
+      if (startsWithThis)
+          path = path.substring(thisDot.length());
+
+      if (!path.matches("^[a-zA-Z0-9._]+$"))
+        throw new ParseException("'" + path + "' is not a valid identifier", line);
       this.path = path;
     }
 
-    @Override
-    public JsonView resolve(Deque<JsonView> contexts, List<String> errors) {
-      JsonView resolved = null;
-      for (JsonView context : contexts) {
-        // TODO: this is a result of that attempt to make @ a valid path identifier, when
-        // really it doesn't make much sense. What would be better is to make @ a special
-        // variable defined within array iteration only, then rather than iteration working
-        // like {{#foo}} {{x}} {{/}} have {{#foo}} {{@.x}} or {{$.x}} {{/}}.
-        if (context.getType() != JsonView.Type.OBJECT)
-          continue;
+    public JsonView resolve(RenderState renderState) {
+      if (isThis)
+        return renderState.getFirstContext();
 
-        resolved = context.get(path);
+      if (startsWithThis)
+        return resolveFromContext(renderState.getFirstContext());
+
+      JsonView resolved = resolveFromContexts(renderState.localContexts);
+      if (resolved == null)
+        resolved = resolveFromContexts(renderState.globalContexts);
+      if (resolved == null)
+        renderState.addError("Couldn't resolve identifier ", this);
+      return resolved;
+    }
+
+    private JsonView resolveFromContexts(Deque<JsonView> contexts) {
+      for (JsonView context : contexts) {
+        JsonView resolved = resolveFromContext(context);
         if (resolved != null)
           return resolved;
       }
-      renderError(errors, "Couldn't resolve identifier ", this);
       return null;
+    }
+
+    private JsonView resolveFromContext(JsonView context) {
+      if (context.getType() != JsonView.Type.OBJECT)
+        return null;
+      return context.get(path);
     }
 
     @Override
     public boolean equals(Object o) {
       if (o == this)
         return true;
-      if (o == null || o.getClass() != this.getClass())
+      if (!(o instanceof Identifier))
         return false;
-      return path.equals(((PathIdentifier) o).path);
+      Identifier other = (Identifier) o;
+      return path.equals(other.path) &&
+             isThis == other.isThis &&
+             startsWithThis == other.startsWithThis;
     }
 
     @Override
     public int hashCode() {
-      return path.hashCode();
+      return path.hashCode() +
+             Boolean.valueOf(isThis).hashCode() +
+             Boolean.valueOf(startsWithThis).hashCode();
     }
 
     @Override
     public String toString() {
-      return path;
+      return isThis ? "@" : ((startsWithThis ? "@." : "") + path);
     }
   }
 
-  private static class ThisIdentifier implements Identifier {
-    public static ThisIdentifier INSTANCE = new ThisIdentifier();
+  /**
+   * A line within the original template.
+   */
+  private static class Line {
+    public final int number;
 
+    public Line(int number) {
+      this.number = number;
+    }
+  }
+
+  /**
+   * A node within the parsed content of the template.
+   */
+  private interface Node {
+    void render(RenderState renderState);
+    void trimLeadingNewLine();
+    int trimTrailingSpaces();
+    void trimTrailingNewLine();
+    boolean trailsWithEmptyLine();
+  }
+
+  /**
+   * Generic implementation of a node that is a "leaf" of the template tree and isn't delegating any
+   * functionality to another node.
+   */
+  private static abstract class LeafNode implements Node {
     @Override
-    public JsonView resolve(Deque<JsonView> contexts, List<String> errors) {
-      return contexts.getFirst();
+    public void trimLeadingNewLine() {
     }
 
     @Override
-    public boolean equals(Object o) {
-      return o instanceof ThisIdentifier;
-    }
-
-    @Override
-    public int hashCode() {
+    public int trimTrailingSpaces() {
       return 0;
     }
 
     @Override
-    public String toString() {
-      return THIS_IDENTIFIER;
+    public void trimTrailingNewLine() {
+    }
+
+    @Override
+    public boolean trailsWithEmptyLine() {
+      return false;
     }
   }
 
-  /** Interface for all objects used as part of rendering templates. */
-  private interface Node {
-    void render(StringBuilder buf, Deque<JsonView> contexts, List<String> errors);
-  }
+  /**
+   * Generic implementation of a node which decorates some other node.
+   */
+  private static abstract class DecoratorNode implements Node {
+    protected final Node content;
 
-  /** Nodes which are "self closing", e.g. {{foo}}, {{*foo}}. */
-  public static abstract class SelfClosingNode implements Node {
-    public Identifier id;
+    protected DecoratorNode(Node content) {
+      this.content = content;
+    }
 
-    public void init(Identifier id) {
-      this.id = id;
+    @Override
+    public void trimLeadingNewLine() {
+      content.trimLeadingNewLine();
+    }
+
+    @Override
+    public int trimTrailingSpaces() {
+      return content.trimTrailingSpaces();
+    }
+
+    @Override
+    public void trimTrailingNewLine() {
+      content.trimTrailingNewLine();
+    }
+
+    @Override
+    public boolean trailsWithEmptyLine() {
+      return content.trailsWithEmptyLine();
     }
   }
 
-  /** Nodes which are not self closing, and have 0..n children. */
-  public static abstract class HasChildrenNode implements Node {
-    public Identifier id;
-    public List<Node> children;
+  /**
+   * A node that is rendered inline. Newline characters are removed. For example:
+   *   hello {{inlineNode}} world.
+   *   hello {{#inlineNode}}hi{{/}} world.
+   */
+  private static class InlineNode extends DecoratorNode {
+    public InlineNode(Node content) {
+      super(content);
+    }
 
-    public void init(Identifier id, List<Node> children) {
-      this.id = id;
-      this.children = children;
+    @Override
+    public void render(RenderState renderState) {
+      RenderState contentRenderState = renderState.inSameContext();
+      content.render(contentRenderState);
+
+      renderState.errors.addAll(contentRenderState.errors);
+
+      for (int i = 0; i < contentRenderState.text.length(); i++) {
+        char c = contentRenderState.text.charAt(i);
+        if (c != '\n')
+          renderState.text.append(c);
+      }
     }
   }
 
-  /** Just a string. */
-  public static class StringNode implements Node {
-    public final String string;
+  /**
+   * A node that is rendered as an indented set of lines. If the wrapped node doesn't render with
+   * any content, no indentation nor line breaks are rendered either. For example:
+   *   {{+indentedNode}}
+   *   {{?indentedNode}}something{{/}}
+   */
+  private static class IndentedNode extends DecoratorNode {
+    private final int indentation;
+
+    public IndentedNode(Node content, int indentation) {
+      super(content);
+      this.indentation = indentation;
+    }
+
+    @Override
+    public void render(RenderState renderState) {
+      RenderState contentRenderState = renderState.inSameContext();
+      content.render(contentRenderState);
+
+      renderState.errors.addAll(contentRenderState.errors);
+
+      indent(renderState.text);
+      for (int i = 0; i < contentRenderState.text.length(); i++) {
+        char c = contentRenderState.text.charAt(i);
+        renderState.text.append(c);
+        if (c == '\n' && i < renderState.text.length() - 1)
+          indent(renderState.text);
+      }
+      renderState.text.append('\n');
+    }
+
+    private void indent(StringBuilder buf) {
+      for (int i = 0; i < indentation; i++)
+        buf.append(' ');
+    }
+  }
+
+  /**
+   * A node that is rendered as a block. For example:
+   * {{#foo}}
+   *   hello
+   * {{/}}
+   */
+  private static class BlockNode extends DecoratorNode {
+    public BlockNode(Node content) {
+      super(content);
+      content.trimLeadingNewLine();
+      content.trimTrailingSpaces();
+    }
+
+    @Override
+    public void render(RenderState renderState) {
+      content.render(renderState);
+    }
+  }
+
+  /**
+   * Exposes a collection of nodes as a single node.
+   */
+  private static class NodeCollection implements Node {
+    private final Node[] nodes;
+
+    public NodeCollection(List<Node> nodes) {
+      this.nodes = new Node[nodes.size()];
+      nodes.toArray(this.nodes);
+    }
+
+    @Override
+    public void render(RenderState renderState) {
+      for (Node node: nodes)
+        node.render(renderState);
+    }
+
+    @Override
+    public void trimLeadingNewLine() {
+      if (nodes.length > 0)
+        nodes[0].trimLeadingNewLine();
+    }
+
+    @Override
+    public int trimTrailingSpaces() {
+      return (nodes.length > 0) ? nodes[nodes.length - 1].trimTrailingSpaces() : 0;
+    }
+
+    @Override
+    public void trimTrailingNewLine() {
+      if (nodes.length > 0)
+        nodes[nodes.length - 1].trimTrailingNewLine();
+    }
+
+    @Override
+    public boolean trailsWithEmptyLine() {
+      return nodes.length > 0 ? nodes[nodes.length - 1].trailsWithEmptyLine() : false;
+    }
+  }
+
+  /**
+   * A node containing a string (may have \n etc). The basic building block of the templates.
+   */
+  private static class StringNode implements Node {
+    private String string;
 
     public StringNode(String string) {
       this.string = string;
     }
 
     @Override
-    public void render(StringBuilder buf, Deque<JsonView> contexts, List<String> errors) {
-      buf.append(string);
+    public void render(RenderState renderState) {
+      renderState.text.append(string);
+    }
+
+    @Override
+    public void trimLeadingNewLine() {
+      if (string.startsWith("\n"))
+        string = string.substring(1);
+    }
+
+    @Override
+    public int trimTrailingSpaces() {
+      int originalLength = string.length();
+      string = string.substring(0, lastIndexOfSpaces());
+      return originalLength - string.length();
+    }
+
+    @Override
+    public void trimTrailingNewLine() {
+      if (string.endsWith("\n"))
+        string = string.substring(0, string.length() - 1);
+    }
+
+    @Override
+    public boolean trailsWithEmptyLine() {
+      int index = lastIndexOfSpaces();
+      return index == 0 || string.charAt(index - 1) == '\n';
+    }
+
+    private int lastIndexOfSpaces() {
+      int index = string.length();
+      while (index > 0 && string.charAt(index - 1) == ' ')
+        index--;
+      return index;
     }
   }
 
-  /** {{foo}} */
-  public static class EscapedVariableNode extends SelfClosingNode {
-    @Override public void render(StringBuilder buf, Deque<JsonView> contexts, List<String> errors) {
-      JsonView value = id.resolve(contexts, errors);
-      if (value != null && !value.isNull())
-        buf.append(htmlEscape(value.toString()));
+  /**
+   * {{foo}}
+   */
+  private static class EscapedVariableNode extends LeafNode {
+    private final Identifier id;
+
+    @SuppressWarnings("unused")
+    public EscapedVariableNode(Identifier id) {
+      this.id = id;
     }
 
-    private static String htmlEscape(String unescaped) {
-      StringBuilder escaped = new StringBuilder();
+    @Override
+    public void render(RenderState renderState) {
+      JsonView value = id.resolve(renderState);
+      if (value != null && !value.isNull())
+        appendEscapedHtml(renderState.text, value.toString());
+    }
+
+    private static void appendEscapedHtml(StringBuilder escaped, String unescaped) {
       for (int i = 0; i < unescaped.length(); i++) {
         char c = unescaped.charAt(i);
         switch (c) {
@@ -223,24 +476,42 @@ public class Handlebar {
           default: escaped.append(c);
         }
       }
-      return escaped.toString();
     }
   }
 
-  /** {{{foo}}} */
-  public static class UnescapedVariableNode extends SelfClosingNode {
-    @Override public void render(StringBuilder buf, Deque<JsonView> contexts, List<String> errors) {
-      JsonView value = id.resolve(contexts, errors);
+  /**
+   * {{{foo}}}
+   */
+  private static class UnescapedVariableNode extends LeafNode {
+    private final Identifier id;
+
+    @SuppressWarnings("unused")
+    public UnescapedVariableNode(Identifier id) {
+      this.id = id;
+    }
+
+    @Override
+    public void render(RenderState renderState) {
+      JsonView value = id.resolve(renderState);
       if (value != null && !value.isNull())
-        buf.append(value);
+        renderState.text.append(value);
     }
   }
 
-  /** {{#foo}} ... {{/}} */
-  public static class SectionNode extends HasChildrenNode {
-    @Override public void render(
-        final StringBuilder buf, final Deque<JsonView> contexts, final List<String> errors) {
-      JsonView value = id.resolve(contexts, errors);
+  /**
+   * {{#foo}} {{/}}
+   */
+  private static class SectionNode extends DecoratorNode {
+    private final Identifier id;
+
+    public SectionNode(Identifier id, Node content) {
+      super(content);
+      this.id = id;
+    }
+
+    @Override
+    public void render(final RenderState renderState) {
+      JsonView value = id.resolve(renderState);
       if (value == null)
         return;
 
@@ -251,38 +522,47 @@ public class Handlebar {
         case BOOLEAN:
         case NUMBER:
         case STRING:
-          renderError(errors, "{{#", id, "}} cannot be rendered with a " + value.getType());
+          renderState.addError("{{#", id, "}} cannot be rendered with a ", value.getType());
           break;
 
         case ARRAY:
           value.asArrayForeach(new ArrayVisitor() {
             @Override
             public void visit(JsonView value, int index) {
-              contexts.addFirst(value);
-              renderNodes(buf, children, contexts, errors);
-              contexts.removeFirst();
+              renderState.localContexts.addFirst(value);
+              content.render(renderState);
+              renderState.localContexts.removeFirst();
             }
           });
           break;
 
         case OBJECT:
-          contexts.addFirst(value);
-          renderNodes(buf, children, contexts, errors);
-          contexts.removeFirst();
+          renderState.localContexts.addFirst(value);
+          content.render(renderState);
+          renderState.localContexts.removeFirst();
           break;
       }
     }
   }
 
-  /** {{?foo}} ... {{/}} */
-  public static class VertedSectionNode extends HasChildrenNode {
-    @Override public void render(StringBuilder buf, Deque<JsonView> contexts, List<String> errors) {
-      // NOTE: null errors because we don't want resolution errors here.
-      JsonView value = id.resolve(contexts, null);
+  /**
+   * {{?foo}} {{/}}
+   */
+  private static class VertedSectionNode extends DecoratorNode {
+    private final Identifier id;
+
+    public VertedSectionNode(Identifier id, Node content) {
+      super(content);
+      this.id = id;
+    }
+
+    @Override
+    public void render(RenderState renderState) {
+      JsonView value = id.resolve(renderState.inSameContext().disableErrors());
       if (value != null && shouldRender(value)) {
-        contexts.addFirst(value);
-        renderNodes(buf, children, contexts, errors);
-        contexts.removeFirst();
+        renderState.localContexts.addFirst(value);
+        content.render(renderState);
+        renderState.localContexts.removeFirst();
       }
     }
 
@@ -306,82 +586,98 @@ public class Handlebar {
     }
   }
 
-  /** {{^foo}} ... {{/}} */
-  public static class InvertedSectionNode extends HasChildrenNode {
-    @Override public void render(StringBuilder buf, Deque<JsonView> contexts, List<String> errors) {
-      // NOTE: null errors because we don't want resolution errors here.
-      JsonView value = id.resolve(contexts, null);
+  /**
+   * {{^foo}} {{/}}
+   */
+  private static class InvertedSectionNode extends DecoratorNode {
+    private final Identifier id;
+
+    public InvertedSectionNode(Identifier id, Node content) {
+      super(content);
+      this.id = id;
+    }
+
+    @Override
+    public void render(RenderState renderState) {
+      JsonView value = id.resolve(renderState.inSameContext().disableErrors());
       if (value == null || !VertedSectionNode.shouldRender(value))
-        renderNodes(buf, children, contexts, errors);
+        content.render(renderState);
     }
   }
 
-  /** {{*foo}} */
-  public static class JsonNode extends SelfClosingNode {
-    @Override public void render(StringBuilder buf, Deque<JsonView> contexts, List<String> errors) {
-      JsonView value = id.resolve(contexts, errors);
+  /**
+   * {{*foo}}
+   */
+  private static class JsonNode extends LeafNode {
+    private final Identifier id;
+
+    @SuppressWarnings("unused")
+    public JsonNode(Identifier id) {
+      this.id = id;
+    }
+
+    @Override
+    public void render(RenderState renderState) {
+      JsonView value = id.resolve(renderState);
       if (value != null)
-        buf.append(JsonConverter.toJson(value));
+        renderState.text.append(JsonConverter.toJson(value));
     }
   }
 
-  /** {{+foo}} */
-  public static class PartialNode extends SelfClosingNode {
-    @Override public void render(StringBuilder buf, Deque<JsonView> contexts, List<String> errors) {
-      JsonView value = id.resolve(contexts, errors);
+  /**
+   * {{+foo}}
+   */
+  private static class PartialNode extends LeafNode {
+    private final Identifier id;
+    private Map<String, Identifier> args = null;
+
+    public PartialNode(Identifier id) {
+      this.id = id;
+    }
+
+    @Override
+    public void render(RenderState renderState) {
+      JsonView value = id.resolve(renderState);
       Handlebar template = null;
       if (value != null)
         template = value.asInstance(Handlebar.class);
       if (template == null) {
-        renderError(errors, id, " didn't resolve to a ", Handlebar.class);
+        renderState.addError(id, " didn't resolve to a ", Handlebar.class);
         return;
       }
-      template.renderInto(buf, contexts, errors);
-    }
-  }
 
-  /** {{:foo}} */
-  public static class SwitchNode implements Node {
-    private final Identifier id;
-    private final Map<String, CaseNode> cases = new HashMap<String, CaseNode>();
+      ArrayDeque<JsonView> argContext = new ArrayDeque<JsonView>();
+      if (!renderState.localContexts.isEmpty())
+        argContext.addFirst(renderState.localContexts.getFirst());
 
-    public SwitchNode(Identifier id) {
-      this.id = id;
-    }
-
-    public void addCase(String caseValue, CaseNode caseNode) {
-      cases.put(caseValue, caseNode);
-    }
-
-    @Override
-    public void render(StringBuilder buf, Deque<JsonView> contexts, List<String> errors) {
-      JsonView value = id.resolve(contexts, errors);
-      if (value == null) {
-        renderError(errors, id, " didn't resolve to any value");
-        return;
+      if (args != null) {
+        Map<String, JsonView> argContextMap = new HashMap<String, JsonView>();
+        for (Map.Entry<String, Identifier> entry : args.entrySet()) {
+          JsonView context = entry.getValue().resolve(renderState);
+          if (context != null)
+            argContextMap.put(entry.getKey(), context);
+        }
+        argContext.addLast(new PojoJsonView(argContextMap));
       }
-      if (value.getType() != JsonView.Type.STRING) {
-        renderError(errors, id, " didn't resolve to a String, instead " + value.getType());
-        return;
-      }
-      CaseNode caseNode = cases.get(value.asString());
-      if (caseNode != null)
-        caseNode.render(buf, contexts, errors);
-    }
-  }
 
-  /** {{=foo}} */
-  public static class CaseNode implements Node {
-    private final List<Node> children;
+      RenderState partialRenderState = new RenderState(renderState.globalContexts, argContext);
+      template.topNode.render(partialRenderState);
 
-    public CaseNode(List<Node> children) {
-      this.children = children;
+      // Partials are special; we don't want to render the trailing \n because it looks ugly
+      // (typically editors will add a \n at the end of documents).
+      // If partials want a trailing \n they need to add it explicitly.
+      int lastIndex = partialRenderState.text.length() - 1;
+      if (lastIndex >= 0 && partialRenderState.text.charAt(lastIndex) == '\n')
+        partialRenderState.text.deleteCharAt(lastIndex);
+
+      renderState.text.append(partialRenderState.text);
+      renderState.errors.addAll(partialRenderState.errors);
     }
 
-    @Override
-    public void render(StringBuilder buf, Deque<JsonView> contexts, List<String> errors) {
-      for (Node child : children)
-        child.render(buf, contexts, errors);
+    public void addArgument(String key, Identifier valueId) {
+      if (args == null)
+        args = new HashMap<String, Identifier>();
+      args.put(key, valueId);
     }
   }
 
@@ -394,8 +690,6 @@ public class Handlebar {
       OPEN_START_INVERTED_SECTION("{{^", InvertedSectionNode.class),
       OPEN_START_JSON            ("{{*", JsonNode.class),
       OPEN_START_PARTIAL         ("{{+", PartialNode.class),
-      OPEN_START_SWITCH          ("{{:", SwitchNode.class),
-      OPEN_CASE                  ("{{=", CaseNode.class),
       OPEN_END_SECTION           ("{{/", null),
       OPEN_UNESCAPED_VARIABLE    ("{{{", UnescapedVariableNode.class),
       CLOSE_MUSTACHE3            ("}}}", null),
@@ -403,12 +697,12 @@ public class Handlebar {
       CLOSE_COMMENT              ("-}}", null),
       OPEN_VARIABLE              ("{{" , EscapedVariableNode.class),
       CLOSE_MUSTACHE             ("}}" , null),
-      CHARACTER                  ("."  , StringNode.class);
+      CHARACTER                  ("."  , null);
 
       final String text;
-      final Class<?> clazz;
+      final Class<? extends Node> clazz;
 
-      Token(String text, Class<?> clazz) {
+      Token(String text, Class<? extends Node> clazz) {
         this.text = text;
         this.clazz = clazz;
       }
@@ -418,23 +712,28 @@ public class Handlebar {
 
     public Token nextToken = null;
     public String nextContents = null;
+    public Line nextLine = null;
 
     public TokenStream(String string) {
       this.remainder = string;
+      nextLine = new Line(1);
       advance();
     }
 
+    /**
+     * Gets whether there are any more tokens in the stream.
+     */
     public boolean hasNext() {
       return nextToken != null;
     }
 
-    public Token advanceOver(Token token) {
-      if (nextToken != token)
-        throw new ParseException("Expecting token " + token + " but got " + nextToken);
-      return advance();
-    }
+    /**
+     * Advances the stream by 1 token, setting nextToken/nextContents/nextLine as needed.
+     */
+    public TokenStream advance() {
+      if ("\n".equals(nextContents))
+        nextLine = new Line(nextLine.number + 1);
 
-    public Token advance() {
       nextToken = null;
       nextContents = null;
 
@@ -453,136 +752,130 @@ public class Handlebar {
 
       nextContents = remainder.substring(0, nextToken.text.length());
       remainder = remainder.substring(nextToken.text.length());
-      return nextToken;
+      return this;
     }
 
-    /** Slight violation of this class' role, but it's too convenient. */
-    public String nextString() {
+    /**
+     * Like {@link #advance} but asserts that the next token is the one given.
+     */
+    public TokenStream advanceOver(Token token) {
+      if (nextToken != token)
+        throw new ParseException("Expecting token " + token + " but got " + nextToken, nextLine);
+      return advance();
+    }
+
+    /**
+     * Advances the token stream over the next continuous stream of characters, while those
+     * characters are not in an excluded set, and returns the string formed by those characters.
+     */
+    public String advanceOverNextString(String excluded) {
       StringBuilder buf = new StringBuilder();
-      while (nextToken == Token.CHARACTER) {
+      while (nextToken == Token.CHARACTER && excluded.indexOf(nextContents.charAt(0)) == -1) {
         buf.append(nextContents);
         advance();
       }
       return buf.toString();
+    }
+
+    public String advanceOverNextString() {
+      return advanceOverNextString("");
     }
   }
 
   /** Source of the template. Public to be included when serialized to JSON. */
   public final String source;
 
-  private final List<Node> nodes = new ArrayList<Node>();
+  /** Top-level node. */
+  private final Node topNode;
 
-  /** Creates a new {@link HandlebarImpl} parsed from a string. */
+  /**
+   * Creates a new {@link HandlebarImpl} parsed from a string.
+   */
   public Handlebar(String template) throws ParseException {
     this.source = template;
     TokenStream tokens = new TokenStream(template);
-    parseSection(tokens, nodes);
+    this.topNode = parseSection(tokens, null);
     if (tokens.hasNext()) {
       throw new ParseException(
-          "There are still tokens remaining, was there an end-section without a start-section?");
+          "There are still tokens remaining, was there an end-section without a start-section?",
+          tokens.nextLine);
     }
   }
 
-  /**
-   * Renders the template given some number of objects to take variables from.
-   */
-  public RenderResult render(Object... contexts) {
-    StringBuilder buf = new StringBuilder();
-    List<String> errors = new ArrayList<String>();
-    Deque<JsonView> contextList = new ArrayDeque<JsonView>();
-    for (Object context : contexts) {
-      if (context instanceof JsonView)
-        contextList.add((JsonView) context);
-      else
-        contextList.add(new PojoJsonView(context));
-    }
-    renderInto(buf, contextList, errors);
-    return new RenderResult(buf.toString(), errors);
-  }
-
-  private void parseSection(TokenStream tokens, List<Node> nodes) {
+  private Node parseSection(TokenStream tokens, Node previousNode) {
+    List<Node> nodes = new ArrayList<Node>();
     boolean sectionEnded = false;
 
     while (tokens.hasNext() && !sectionEnded) {
-      switch (tokens.nextToken) {
+      TokenStream.Token token = tokens.nextToken;
+      Node node = null;
+
+      switch (token) {
         case CHARACTER:
-          nodes.add(new StringNode(tokens.nextString()));
+          node = new StringNode(tokens.advanceOverNextString());
           break;
 
         case OPEN_VARIABLE:
         case OPEN_UNESCAPED_VARIABLE:
-        case OPEN_START_JSON:
-        case OPEN_START_PARTIAL: {
-          TokenStream.Token token = tokens.nextToken;
-          Identifier id = openSection(tokens);
-
+        case OPEN_START_JSON: {
+          Identifier id = openSectionOrTag(tokens);
           try {
-            SelfClosingNode node = (SelfClosingNode) token.clazz.newInstance();
-            node.init(id);
-            nodes.add(node);
+            node = token.clazz.getConstructor(Identifier.class).newInstance(id);
           } catch (Exception e) {
-            e.printStackTrace();
-            throw new ParseException(e.toString());
+            throw new AssertionError(e);
           }
+          break;
+        }
+
+        case OPEN_START_PARTIAL: {
+          // Hand-write partial code because it's special.
+          tokens.advance();
+          Identifier id = new Identifier(tokens.advanceOverNextString(" "), tokens.nextLine);
+          PartialNode partialNode = new PartialNode(id);
+
+          // Parse the arguments to the partial.
+          while (tokens.nextToken == TokenStream.Token.CHARACTER) {
+            tokens.advance();
+            String key = tokens.advanceOverNextString(":");
+            tokens.advance();  // past ':'
+            partialNode.addArgument(
+                key,
+                new Identifier(tokens.advanceOverNextString(" "), tokens.nextLine));
+          }
+
+          tokens.advanceOver(TokenStream.Token.CLOSE_MUSTACHE);
+          node = partialNode;
           break;
         }
 
         case OPEN_START_SECTION:
         case OPEN_START_VERTED_SECTION:
         case OPEN_START_INVERTED_SECTION: {
-          TokenStream.Token token = tokens.nextToken;
-          Identifier id = openSection(tokens);
+          Line startLine = tokens.nextLine;
 
-          List<Node> children = new ArrayList<Node>();
-          parseSection(tokens, children);
+          Identifier id = openSectionOrTag(tokens);
+          Node section = parseSection(tokens, previousNode);
           closeSection(tokens, id);
 
           try {
-            HasChildrenNode node = (HasChildrenNode) token.clazz.newInstance();
-            node.init(id, children);
-            nodes.add(node);
+            node = token.clazz.getConstructor(Identifier.class, Node.class)
+                .newInstance(id, section);
           } catch (Exception e) {
-            e.printStackTrace();
-            throw new ParseException(e.toString());
+            throw new AssertionError(e);
+          }
+
+          if (startLine != tokens.nextLine) {
+            node = new BlockNode(node);
+            if (previousNode != null)
+              previousNode.trimTrailingSpaces();
+            if ("\n".equals(tokens.nextContents))
+              tokens.advance();
           }
           break;
         }
 
         case OPEN_COMMENT:
-          openComment(tokens);
-          break;
-
-        case OPEN_START_SWITCH: {
-          Identifier id = openSection(tokens);
-
-          // Chew up anything between here and the first case (or the closing of a section, if
-          // needs be).
-          // TODO: this wouldn't be necessary if we did the blank line optimisation thing.
-          while (tokens.nextToken == TokenStream.Token.CHARACTER)
-            tokens.advanceOver(TokenStream.Token.CHARACTER);
-
-          SwitchNode switchNode = new SwitchNode(id);
-          nodes.add(switchNode);
-
-          while (tokens.hasNext() && tokens.nextToken == TokenStream.Token.OPEN_CASE) {
-            tokens.advanceOver(TokenStream.Token.OPEN_CASE);
-            String caseValue = tokens.nextString();
-            tokens.advanceOver(TokenStream.Token.CLOSE_MUSTACHE);
-
-            List<Node> caseChildren = new ArrayList<Node>();
-            // TODO: make parseSection take terminating nodes, pass in OPEN_CASE.
-            parseSection(tokens, caseChildren);
-
-            switchNode.addCase(caseValue, new CaseNode(caseChildren));
-          }
-
-          closeSection(tokens, id);
-          break;
-        }
-
-        case OPEN_CASE:
-          // See below.
-          sectionEnded = true;
+          advanceOverComment(tokens);
           break;
 
         case OPEN_END_SECTION:
@@ -593,75 +886,82 @@ public class Handlebar {
           break;
 
         case CLOSE_MUSTACHE:
-          throw new ParseException("Orphaned " + tokens.nextToken);
+          throw new ParseException("Orphaned " + tokens.nextToken, tokens.nextLine);
       }
+
+      if (node == null)
+        continue;
+
+      // If it's a non-string node (and not already made into a block), determine whether it's
+      // inline vs the only node on the line.
+      if (!(node instanceof StringNode) && !(node instanceof BlockNode)) {
+        if ((previousNode == null || previousNode.trailsWithEmptyLine()) &&
+            (!tokens.hasNext() || tokens.nextContents.equals("\n"))) {
+          int indentation = 0;
+          if (previousNode != null)
+            indentation = previousNode.trimTrailingSpaces();
+          tokens.advance(); // over \n
+          node = new IndentedNode(node, indentation);
+        } else {
+          node = new InlineNode(node);
+        }
+      }
+
+      previousNode = node;
+      nodes.add(node);
     }
+
+    return (nodes.size() == 1) ? nodes.get(0) : new NodeCollection(nodes);
   }
 
-  private void openComment(TokenStream tokens) {
+  private void advanceOverComment(TokenStream tokens) {
     tokens.advanceOver(TokenStream.Token.OPEN_COMMENT);
-    while (tokens.nextToken != TokenStream.Token.CLOSE_COMMENT) {
-      if (tokens.nextToken == TokenStream.Token.OPEN_COMMENT)
-        openComment(tokens);
-      else
-        tokens.advance();
+    int depth = 1;
+    while (tokens.hasNext() && depth > 0) {
+      switch (tokens.nextToken) {
+        case OPEN_COMMENT:
+          depth++;
+          break;
+        case CLOSE_COMMENT:
+          depth--;
+          break;
+      }
+      tokens.advance();
     }
-    tokens.advanceOver(TokenStream.Token.CLOSE_COMMENT);
   }
 
-  private Identifier openSection(TokenStream tokens) {
+  private Identifier openSectionOrTag(TokenStream tokens) {
     TokenStream.Token openToken = tokens.nextToken;
     tokens.advance();
-    Identifier id = createIdentifier(tokens.nextString());
-    if (openToken == TokenStream.Token.OPEN_UNESCAPED_VARIABLE)
-      tokens.advanceOver(TokenStream.Token.CLOSE_MUSTACHE3);
-    else
-      tokens.advanceOver(TokenStream.Token.CLOSE_MUSTACHE);
+    Identifier id = new Identifier(tokens.advanceOverNextString(), tokens.nextLine);
+    tokens.advanceOver(openToken == TokenStream.Token.OPEN_UNESCAPED_VARIABLE ?
+        TokenStream.Token.CLOSE_MUSTACHE3 : TokenStream.Token.CLOSE_MUSTACHE);
     return id;
   }
 
   private void closeSection(TokenStream tokens, Identifier id) {
     tokens.advanceOver(TokenStream.Token.OPEN_END_SECTION);
-    String nextString = tokens.nextString();
-    if (!nextString.isEmpty() && !id.equals(createIdentifier(nextString))) {
+    String nextString = tokens.advanceOverNextString();
+    if (!nextString.isEmpty() && !nextString.equals(id.toString())) {
       throw new ParseException(
-          "Start section " + id + " doesn't match end section " + nextString);
+          "Start section " + id + " doesn't match end section " + nextString, tokens.nextLine);
     }
     tokens.advanceOver(TokenStream.Token.CLOSE_MUSTACHE);
   }
 
-  private void renderInto(StringBuilder buf, Deque<JsonView> contexts, List<String> errors) {
-    renderNodes(buf, nodes, contexts, errors);
-  }
-
-  private static void renderNodes(
-      StringBuilder buf,
-      List<Node> nodes,
-      Deque<JsonView> contexts,
-      List<String> errors) {
-    for (Node node : nodes)
-      node.render(buf, contexts, errors);
-  }
-
-  private static void renderError(List<String> errors, Object... messages) {
-    if (errors == null)
-      return;
-    StringBuilder buf = new StringBuilder();
-    for (Object message : messages)
-      buf.append(message);
-    errors.add(buf.toString());
-  }
-
-  private static Identifier createIdentifier(String path) {
-    return Identifier.THIS_IDENTIFIER.equals(path) ?
-        ThisIdentifier.INSTANCE : new PathIdentifier(path);
-  }
-
-  @Override
-  public String toString() {
-    StringBuilder buf = new StringBuilder();
-    for (Node node : nodes)
-      buf.append(node);
-    return buf.toString();
+  /**
+   * Renders the template given some number of objects to take variables from.
+   */
+  public RenderResult render(Object... contexts) {
+    Deque<JsonView> globalContexts = new ArrayDeque<JsonView>();
+    for (Object context : contexts) {
+      if (context instanceof JsonView)
+        globalContexts.addLast((JsonView) context);
+      else
+        globalContexts.addLast(new PojoJsonView(context));
+    }
+    RenderState renderState = new RenderState(globalContexts, new ArrayDeque<JsonView>());
+    topNode.render(renderState);
+    return renderState.getResult();
   }
 }

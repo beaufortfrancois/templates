@@ -1,0 +1,26 @@
+Inline partials should get squashed down: {{+partials.cleanPartials_p1}}.
+
+The same partial on its own line shouldn't get squashed down:
+{{+partials.cleanPartials_p1}}
+(and shouldn't add any new lines before or after).
+
+Partials should be indented on the level that they're included:
+  {{+partials.cleanPartials_p1}}
+(still no newlines).
+
+These should all be single lines; too hard to do it otherwise.
+This is more consistent too.
+{{?list}}{{+partials.cleanPartials_p1}}{{/}}
+  {{?list}}{{+partials.cleanPartials_p1}}{{/}}
+
+{{?list}}a {{+partials.cleanPartials_p1}}{{/}}
+  {{?list}}a {{+partials.cleanPartials_p1}}{{/}}
+
+{{#list}}{{+partials.cleanPartials_p1}}{{/}}
+  {{#list}}{{+partials.cleanPartials_p1}}{{/}}
+
+{{#list}}a {{+partials.cleanPartials_p1}}{{/}}
+  {{#list}}a {{+partials.cleanPartials_p1}}{{/}}
+
+{{?list}}{{#list}}{{+partials.cleanPartials_p1}}{{/}}{{/}}
+  {{?list}}{{#list}}{{+partials.cleanPartials_p1}}{{/}}{{/}}
