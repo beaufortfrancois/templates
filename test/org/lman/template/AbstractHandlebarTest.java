@@ -222,4 +222,9 @@ public abstract class AbstractHandlebarTest {
     test("partialInheritance", "partialInheritance_p1");
   }
 
+  @Test
+  public void emptySections() {
+    test("emptySections");
+  }
+
 }

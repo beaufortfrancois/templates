@@ -178,25 +178,6 @@ public class Handlebar {
     }
 
     @Override
-    public boolean equals(Object o) {
-      if (o == this)
-        return true;
-      if (!(o instanceof Identifier))
-        return false;
-      Identifier other = (Identifier) o;
-      return path.equals(other.path) &&
-             isThis == other.isThis &&
-             startsWithThis == other.startsWithThis;
-    }
-
-    @Override
-    public int hashCode() {
-      return path.hashCode() +
-             Boolean.valueOf(isThis).hashCode() +
-             Boolean.valueOf(startsWithThis).hashCode();
-    }
-
-    @Override
     public String toString() {
       return isThis ? "@" : ((startsWithThis ? "@." : "") + path);
     }
@@ -218,10 +199,13 @@ public class Handlebar {
    */
   private interface Node {
     void render(RenderState renderState);
-    void trimLeadingNewLine();
-    int trimTrailingSpaces();
-    void trimTrailingNewLine();
-    boolean trailsWithEmptyLine();
+    void trimStartingNewLine();
+    boolean startsWithNewLine();
+    int trimEndingSpaces();
+    void trimEndingNewLine();
+    boolean endsWithEmptyLine();
+    Line getStartLine();
+    Line getEndLine();
   }
 
   /**
@@ -229,22 +213,43 @@ public class Handlebar {
    * functionality to another node.
    */
   private static abstract class LeafNode implements Node {
-    @Override
-    public void trimLeadingNewLine() {
+    private final Line line;
+
+    protected LeafNode(Line line) {
+      this.line = line;
     }
 
     @Override
-    public int trimTrailingSpaces() {
+    public boolean startsWithNewLine() {
+      return false;
+    }
+
+    @Override
+    public void trimStartingNewLine() {
+    }
+
+    @Override
+    public int trimEndingSpaces() {
       return 0;
     }
 
     @Override
-    public void trimTrailingNewLine() {
+    public void trimEndingNewLine() {
     }
 
     @Override
-    public boolean trailsWithEmptyLine() {
+    public boolean endsWithEmptyLine() {
       return false;
+    }
+
+    @Override
+    public Line getStartLine() {
+      return line;
+    }
+
+    @Override
+    public Line getEndLine() {
+      return line;
     }
   }
 
@@ -259,23 +264,38 @@ public class Handlebar {
     }
 
     @Override
-    public void trimLeadingNewLine() {
-      content.trimLeadingNewLine();
+    public boolean startsWithNewLine() {
+      return content.startsWithNewLine();
     }
 
     @Override
-    public int trimTrailingSpaces() {
-      return content.trimTrailingSpaces();
+    public void trimStartingNewLine() {
+      content.trimStartingNewLine();
     }
 
     @Override
-    public void trimTrailingNewLine() {
-      content.trimTrailingNewLine();
+    public int trimEndingSpaces() {
+      return content.trimEndingSpaces();
     }
 
     @Override
-    public boolean trailsWithEmptyLine() {
-      return content.trailsWithEmptyLine();
+    public void trimEndingNewLine() {
+      content.trimEndingNewLine();
+    }
+
+    @Override
+    public boolean endsWithEmptyLine() {
+      return content.endsWithEmptyLine();
+    }
+
+    @Override
+    public Line getStartLine() {
+      return content.getStartLine();
+    }
+
+    @Override
+    public Line getEndLine() {
+      return content.getEndLine();
     }
   }
 
@@ -301,6 +321,11 @@ public class Handlebar {
         if (c != '\n')
           renderState.text.append(c);
       }
+    }
+
+    @Override
+    public String toString() {
+      return "INLINE(" + content + ")";
     }
   }
 
@@ -339,6 +364,11 @@ public class Handlebar {
       for (int i = 0; i < indentation; i++)
         buf.append(' ');
     }
+
+    @Override
+    public String toString() {
+      return "INDENTED:" + indentation + "(" + content + ")";
+    }
   }
 
   /**
@@ -350,13 +380,18 @@ public class Handlebar {
   private static class BlockNode extends DecoratorNode {
     public BlockNode(Node content) {
       super(content);
-      content.trimLeadingNewLine();
-      content.trimTrailingSpaces();
+      content.trimStartingNewLine();
+      content.trimEndingSpaces();
     }
 
     @Override
     public void render(RenderState renderState) {
       content.render(renderState);
+    }
+
+    @Override
+    public String toString() {
+      return "BLOCK(" + content + ")";
     }
   }
 
@@ -367,6 +402,8 @@ public class Handlebar {
     private final Node[] nodes;
 
     public NodeCollection(List<Node> nodes) {
+      if (nodes.isEmpty())
+        throw new IllegalArgumentException();
       this.nodes = new Node[nodes.size()];
       nodes.toArray(this.nodes);
     }
@@ -378,25 +415,46 @@ public class Handlebar {
     }
 
     @Override
-    public void trimLeadingNewLine() {
-      if (nodes.length > 0)
-        nodes[0].trimLeadingNewLine();
+    public boolean startsWithNewLine() {
+      return nodes[0].startsWithNewLine();
     }
 
     @Override
-    public int trimTrailingSpaces() {
-      return (nodes.length > 0) ? nodes[nodes.length - 1].trimTrailingSpaces() : 0;
+    public void trimStartingNewLine() {
+      nodes[0].trimStartingNewLine();
     }
 
     @Override
-    public void trimTrailingNewLine() {
-      if (nodes.length > 0)
-        nodes[nodes.length - 1].trimTrailingNewLine();
+    public int trimEndingSpaces() {
+      return nodes[nodes.length - 1].trimEndingSpaces();
     }
 
     @Override
-    public boolean trailsWithEmptyLine() {
-      return nodes.length > 0 ? nodes[nodes.length - 1].trailsWithEmptyLine() : false;
+    public void trimEndingNewLine() {
+      nodes[nodes.length - 1].trimEndingNewLine();
+    }
+
+    @Override
+    public boolean endsWithEmptyLine() {
+      return nodes[nodes.length - 1].endsWithEmptyLine();
+    }
+
+    @Override
+    public Line getStartLine() {
+      return nodes[0].getStartLine();
+    }
+
+    @Override
+    public Line getEndLine() {
+      return nodes[nodes.length - 1].getEndLine();
+    }
+
+    @Override
+    public String toString() {
+      StringBuilder buf = new StringBuilder();
+      for (Node node : nodes)
+        buf.append(node);
+      return buf.toString();
     }
   }
 
@@ -405,9 +463,13 @@ public class Handlebar {
    */
   private static class StringNode implements Node {
     private String string;
+    private final Line startLine;
+    private final Line endLine;
 
-    public StringNode(String string) {
+    public StringNode(String string, Line startLine, Line endLine) {
       this.string = string;
+      this.startLine = startLine;
+      this.endLine = endLine;
     }
 
     @Override
@@ -416,26 +478,31 @@ public class Handlebar {
     }
 
     @Override
-    public void trimLeadingNewLine() {
-      if (string.startsWith("\n"))
+    public boolean startsWithNewLine() {
+      return string.startsWith("\n");
+    }
+
+    @Override
+    public void trimStartingNewLine() {
+      if (startsWithNewLine())
         string = string.substring(1);
     }
 
     @Override
-    public int trimTrailingSpaces() {
+    public int trimEndingSpaces() {
       int originalLength = string.length();
       string = string.substring(0, lastIndexOfSpaces());
       return originalLength - string.length();
     }
 
     @Override
-    public void trimTrailingNewLine() {
+    public void trimEndingNewLine() {
       if (string.endsWith("\n"))
         string = string.substring(0, string.length() - 1);
     }
 
     @Override
-    public boolean trailsWithEmptyLine() {
+    public boolean endsWithEmptyLine() {
       int index = lastIndexOfSpaces();
       return index == 0 || string.charAt(index - 1) == '\n';
     }
@@ -446,6 +513,21 @@ public class Handlebar {
         index--;
       return index;
     }
+
+    @Override
+    public Line getStartLine() {
+      return startLine;
+    }
+
+    @Override
+    public Line getEndLine() {
+      return endLine;
+    }
+
+    @Override
+    public String toString() {
+      return "STRING(" + string + ")";
+    }
   }
 
   /**
@@ -454,8 +536,8 @@ public class Handlebar {
   private static class EscapedVariableNode extends LeafNode {
     private final Identifier id;
 
-    @SuppressWarnings("unused")
-    public EscapedVariableNode(Identifier id) {
+    public EscapedVariableNode(Identifier id, Line line) {
+      super(line);
       this.id = id;
     }
 
@@ -477,6 +559,11 @@ public class Handlebar {
         }
       }
     }
+
+    @Override
+    public String toString() {
+      return "{{" + id + "}}";
+    }
   }
 
   /**
@@ -485,8 +572,8 @@ public class Handlebar {
   private static class UnescapedVariableNode extends LeafNode {
     private final Identifier id;
 
-    @SuppressWarnings("unused")
-    public UnescapedVariableNode(Identifier id) {
+    public UnescapedVariableNode(Identifier id, Line line) {
+      super(line);
       this.id = id;
     }
 
@@ -495,6 +582,11 @@ public class Handlebar {
       JsonView value = id.resolve(renderState);
       if (value != null && !value.isNull())
         renderState.text.append(value);
+    }
+
+    @Override
+    public String toString() {
+      return "{{{" + id + "}}}";
     }
   }
 
@@ -543,6 +635,11 @@ public class Handlebar {
           break;
       }
     }
+
+    @Override
+    public String toString() {
+      return "{{#" + id + "}}" + content + "{{/" + id + "}}";
+    }
   }
 
   /**
@@ -584,6 +681,11 @@ public class Handlebar {
           throw new UnsupportedOperationException();
       }
     }
+
+    @Override
+    public String toString() {
+      return "{{?" + id + "}}" + content + "{{/" + id + "}}";
+    }
   }
 
   /**
@@ -603,6 +705,11 @@ public class Handlebar {
       if (value == null || !VertedSectionNode.shouldRender(value))
         content.render(renderState);
     }
+
+    @Override
+    public String toString() {
+      return "{{?" + id + "}}" + content + "{{/" + id + "}}";
+    }
   }
 
   /**
@@ -611,8 +718,8 @@ public class Handlebar {
   private static class JsonNode extends LeafNode {
     private final Identifier id;
 
-    @SuppressWarnings("unused")
-    public JsonNode(Identifier id) {
+    public JsonNode(Identifier id, Line line) {
+      super(line);
       this.id = id;
     }
 
@@ -621,6 +728,11 @@ public class Handlebar {
       JsonView value = id.resolve(renderState);
       if (value != null)
         renderState.text.append(JsonConverter.toJson(value));
+    }
+
+    @Override
+    public String toString() {
+      return "{{*" + id + "}}";
     }
   }
 
@@ -631,7 +743,8 @@ public class Handlebar {
     private final Identifier id;
     private Map<String, Identifier> args = null;
 
-    public PartialNode(Identifier id) {
+    public PartialNode(Identifier id, Line line) {
+      super(line);
       this.id = id;
     }
 
@@ -663,9 +776,9 @@ public class Handlebar {
       RenderState partialRenderState = new RenderState(renderState.globalContexts, argContext);
       template.topNode.render(partialRenderState);
 
-      // Partials are special; we don't want to render the trailing \n because it looks ugly
+      // Partials are special; we don't want to render the Ending \n because it looks ugly
       // (typically editors will add a \n at the end of documents).
-      // If partials want a trailing \n they need to add it explicitly.
+      // If partials want a Ending \n they need to add it explicitly.
       int lastIndex = partialRenderState.text.length() - 1;
       if (lastIndex >= 0 && partialRenderState.text.charAt(lastIndex) == '\n')
         partialRenderState.text.deleteCharAt(lastIndex);
@@ -678,6 +791,11 @@ public class Handlebar {
       if (args == null)
         args = new HashMap<String, Identifier>();
       args.put(key, valueId);
+    }
+
+    @Override
+    public String toString() {
+      return "{{+" + id + "}}";
     }
   }
 
@@ -794,7 +912,10 @@ public class Handlebar {
   public Handlebar(String template) throws ParseException {
     this.source = template;
     TokenStream tokens = new TokenStream(template);
-    this.topNode = parseSection(tokens, null);
+    this.topNode = parseSection(tokens);
+    if (topNode == null)
+      throw new ParseException("Template is empty", new Line(0));
+    System.out.println(topNode);
     if (tokens.hasNext()) {
       throw new ParseException(
           "There are still tokens remaining, was there an end-section without a start-section?",
@@ -802,7 +923,7 @@ public class Handlebar {
     }
   }
 
-  private Node parseSection(TokenStream tokens, Node previousNode) {
+  private Node parseSection(TokenStream tokens) {
     List<Node> nodes = new ArrayList<Node>();
     boolean sectionEnded = false;
 
@@ -811,16 +932,20 @@ public class Handlebar {
       Node node = null;
 
       switch (token) {
-        case CHARACTER:
-          node = new StringNode(tokens.advanceOverNextString());
+        case CHARACTER: {
+          Line startLine = tokens.nextLine;
+          String string = tokens.advanceOverNextString();
+          node = new StringNode(string, startLine, tokens.nextLine);
           break;
+        }
 
         case OPEN_VARIABLE:
         case OPEN_UNESCAPED_VARIABLE:
         case OPEN_START_JSON: {
           Identifier id = openSectionOrTag(tokens);
           try {
-            node = token.clazz.getConstructor(Identifier.class).newInstance(id);
+            node = token.clazz.getConstructor(Identifier.class, Line.class)
+                .newInstance(id, tokens.nextLine);
           } catch (Exception e) {
             throw new AssertionError(e);
           }
@@ -831,7 +956,7 @@ public class Handlebar {
           // Hand-write partial code because it's special.
           tokens.advance();
           Identifier id = new Identifier(tokens.advanceOverNextString(" "), tokens.nextLine);
-          PartialNode partialNode = new PartialNode(id);
+          PartialNode partialNode = new PartialNode(id, tokens.nextLine);
 
           // Parse the arguments to the partial.
           while (tokens.nextToken == TokenStream.Token.CHARACTER) {
@@ -851,25 +976,16 @@ public class Handlebar {
         case OPEN_START_SECTION:
         case OPEN_START_VERTED_SECTION:
         case OPEN_START_INVERTED_SECTION: {
-          Line startLine = tokens.nextLine;
-
           Identifier id = openSectionOrTag(tokens);
-          Node section = parseSection(tokens, previousNode);
+          Node section = parseSection(tokens);
           closeSection(tokens, id);
-
-          try {
-            node = token.clazz.getConstructor(Identifier.class, Node.class)
-                .newInstance(id, section);
-          } catch (Exception e) {
-            throw new AssertionError(e);
-          }
-
-          if (startLine != tokens.nextLine) {
-            node = new BlockNode(node);
-            if (previousNode != null)
-              previousNode.trimTrailingSpaces();
-            if ("\n".equals(tokens.nextContents))
-              tokens.advance();
+          if (section != null) {
+            try {
+              node = token.clazz.getConstructor(Identifier.class, Node.class)
+                  .newInstance(id, section);
+            } catch (Exception e) {
+              throw new AssertionError(e);
+            }
           }
           break;
         }
@@ -889,29 +1005,47 @@ public class Handlebar {
           throw new ParseException("Orphaned " + tokens.nextToken, tokens.nextLine);
       }
 
-      if (node == null)
-        continue;
-
-      // If it's a non-string node (and not already made into a block), determine whether it's
-      // inline vs the only node on the line.
-      if (!(node instanceof StringNode) && !(node instanceof BlockNode)) {
-        if ((previousNode == null || previousNode.trailsWithEmptyLine()) &&
-            (!tokens.hasNext() || tokens.nextContents.equals("\n"))) {
-          int indentation = 0;
-          if (previousNode != null)
-            indentation = previousNode.trimTrailingSpaces();
-          tokens.advance(); // over \n
-          node = new IndentedNode(node, indentation);
-        } else {
-          node = new InlineNode(node);
-        }
-      }
-
-      previousNode = node;
-      nodes.add(node);
+      if (node != null)
+        nodes.add(node);
     }
 
-    return (nodes.size() == 1) ? nodes.get(0) : new NodeCollection(nodes);
+    for (int i = 0; i < nodes.size(); i++) {
+      Node node = nodes.get(i);
+
+      if (node instanceof StringNode)
+        continue;
+
+      Node previousNode = (i > 0) ? nodes.get(i - 1) : null;
+      Node nextNode = (i < nodes.size() - 1) ? nodes.get(i + 1) : null;
+      Node renderedNode = null;
+
+      if (node.getStartLine() != node.getEndLine()) {
+        renderedNode = new BlockNode(node);
+        if (previousNode != null)
+          previousNode.trimEndingSpaces();
+        if (nextNode != null)
+          nextNode.trimStartingNewLine();
+      } else if ((node instanceof LeafNode) &&
+                 (previousNode == null || previousNode.endsWithEmptyLine()) &&
+                 (nextNode == null || nextNode.startsWithNewLine())) {
+        int indentation = 0;
+        if (previousNode != null)
+          indentation = previousNode.trimEndingSpaces();
+        if (nextNode != null)
+          nextNode.trimStartingNewLine();
+        renderedNode = new IndentedNode(node, indentation);
+      } else {
+        renderedNode = new InlineNode(node);
+      }
+
+      nodes.set(i, renderedNode);
+    }
+
+    if (nodes.isEmpty())
+      return null;
+    if (nodes.size() == 1)
+      return nodes.get(0);
+    return new NodeCollection(nodes);
   }
 
   private void advanceOverComment(TokenStream tokens) {

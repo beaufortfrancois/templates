@@ -4,9 +4,22 @@ The same partial on its own line shouldn't get squashed down:
 {{+partials.cleanPartials_p1}}
 (and shouldn't add any new lines before or after).
 
+More funkiness when they're adjacent:
+{{+partials.cleanPartials_p1}}
+{{+partials.cleanPartials_p1}}
+{{+partials.cleanPartials_p1}}
+(woo).
+
 Partials should be indented on the level that they're included:
   {{+partials.cleanPartials_p1}}
 (still no newlines).
+
+Even more funk:
+  {{+partials.cleanPartials_p1}}
+    {{+partials.cleanPartials_p1}}
+  {{+partials.cleanPartials_p1}}
+    {{+partials.cleanPartials_p1}}
+(woo).
 
 These should all be single lines; too hard to do it otherwise.
 This is more consistent too.

@@ -1,0 +1,5 @@
+The following is a section with no content. It should not render.
+{{#list}}{{/}}
+
+Now, a section with no content within another section. It also should not render.
+{{#block}}{{#list}}{{/list}}{{/block}}
