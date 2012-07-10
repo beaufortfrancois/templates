@@ -1,0 +1,27 @@
+Before
+foo is false
+bar is true
+baz is a tree
+qux is
+qux
+xyzzy
+quux is
+underwater
+corge is
+a cat
+grault is true
+garply is 
+waldo is false
+
+    Indented
+    foo is false
+    bar is true
+    baz is a tree
+    qux is
+qux
+xyzzy
+    quux is
+underwater
+    corge is
+a cat
+    After

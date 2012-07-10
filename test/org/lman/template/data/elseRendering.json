@@ -1,0 +1,10 @@
+{
+  "foo": false,
+  "bar": true,
+  "qux": "qux\nxyzzy",
+  "quux": false,
+  "corge": false,
+  "grault": true,
+  "garply": false,
+  "waldo": false
+}
