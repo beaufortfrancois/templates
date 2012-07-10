@@ -49,7 +49,6 @@ import org.lman.json.PojoJsonView;
  * make it easier to port to Javascript/Coffeescript.
  */
 // TODO: comments on all platforms.
-// TODO: {{|}} or {{-}} to mean "else".
 // TODO: experiment with ensureCapacity when calling Node#render.
 public class Handlebar {
 
@@ -808,6 +807,7 @@ public class Handlebar {
       OPEN_START_INVERTED_SECTION("{{^", InvertedSectionNode.class),
       OPEN_START_JSON            ("{{*", JsonNode.class),
       OPEN_START_PARTIAL         ("{{+", PartialNode.class),
+      OPEN_ELSE                  ("{{:", null),
       OPEN_END_SECTION           ("{{/", null),
       OPEN_UNESCAPED_VARIABLE    ("{{{", UnescapedVariableNode.class),
       CLOSE_MUSTACHE3            ("}}}", null),
@@ -823,6 +823,14 @@ public class Handlebar {
       Token(String text, Class<? extends Node> clazz) {
         this.text = text;
         this.clazz = clazz;
+      }
+      
+      public Class<? extends Node> elseNodeClass() {
+        if (this.clazz == VertedSectionNode.class)
+          return InvertedSectionNode.class;
+        if (this.clazz == InvertedSectionNode.class)
+          return VertedSectionNode.class;
+        throw new UnsupportedOperationException(this.clazz + " can not have an else clause.");
       }
     }
 
@@ -929,13 +937,12 @@ public class Handlebar {
 
     while (tokens.hasNext() && !sectionEnded) {
       TokenStream.Token token = tokens.nextToken;
-      Node node = null;
 
       switch (token) {
         case CHARACTER: {
           Line startLine = tokens.nextLine;
           String string = tokens.advanceOverNextString();
-          node = new StringNode(string, startLine, tokens.nextLine);
+          nodes.add(new StringNode(string, startLine, tokens.nextLine));
           break;
         }
 
@@ -944,8 +951,8 @@ public class Handlebar {
         case OPEN_START_JSON: {
           Identifier id = openSectionOrTag(tokens);
           try {
-            node = token.clazz.getConstructor(Identifier.class, Line.class)
-                .newInstance(id, tokens.nextLine);
+            nodes.add(token.clazz.getConstructor(Identifier.class, Line.class)
+                .newInstance(id, tokens.nextLine));
           } catch (Exception e) {
             throw new AssertionError(e);
           }
@@ -969,20 +976,41 @@ public class Handlebar {
           }
 
           tokens.advanceOver(TokenStream.Token.CLOSE_MUSTACHE);
-          node = partialNode;
+          nodes.add(partialNode);
           break;
         }
 
-        case OPEN_START_SECTION:
+        case OPEN_START_SECTION: {
+          Identifier id = openSectionOrTag(tokens);
+          Node section = parseSection(tokens);
+          closeSection(tokens, id);
+          if (section != null)
+            nodes.add(new SectionNode(id, section));
+          break;
+        }
+
         case OPEN_START_VERTED_SECTION:
         case OPEN_START_INVERTED_SECTION: {
           Identifier id = openSectionOrTag(tokens);
           Node section = parseSection(tokens);
+          Node elseSection = null;
+          if (tokens.nextToken == TokenStream.Token.OPEN_ELSE) {
+            openElse(tokens, id);
+            elseSection = parseSection(tokens);
+          }
           closeSection(tokens, id);
           if (section != null) {
             try {
-              node = token.clazz.getConstructor(Identifier.class, Node.class)
-                  .newInstance(id, section);
+              nodes.add(token.clazz.getConstructor(Identifier.class, Node.class)
+                  .newInstance(id, section));
+            } catch (Exception e) {
+              throw new AssertionError(e);
+            }
+          }
+          if (elseSection != null) {
+            try {
+              nodes.add(token.elseNodeClass().getConstructor(Identifier.class, Node.class)
+                  .newInstance(id, elseSection));
             } catch (Exception e) {
               throw new AssertionError(e);
             }
@@ -995,6 +1023,7 @@ public class Handlebar {
           break;
 
         case OPEN_END_SECTION:
+        case OPEN_ELSE:
           // Handled after running parseSection within the SECTION cases, so this is a
           // terminating condition. If there *is* an orphaned OPEN_END_SECTION, it will be caught
           // by noticing that there are leftover tokens after termination.
@@ -1004,9 +1033,6 @@ public class Handlebar {
         case CLOSE_MUSTACHE:
           throw new ParseException("Orphaned " + tokens.nextToken, tokens.nextLine);
       }
-
-      if (node != null)
-        nodes.add(node);
     }
 
     for (int i = 0; i < nodes.size(); i++) {
@@ -1079,6 +1105,16 @@ public class Handlebar {
     if (!nextString.isEmpty() && !nextString.equals(id.toString())) {
       throw new ParseException(
           "Start section " + id + " doesn't match end section " + nextString, tokens.nextLine);
+    }
+    tokens.advanceOver(TokenStream.Token.CLOSE_MUSTACHE);
+  }
+  
+  private void openElse(TokenStream tokens, Identifier id) {
+    tokens.advanceOver(TokenStream.Token.OPEN_ELSE);
+    String nextString = tokens.advanceOverNextString();
+    if (!nextString.isEmpty() && !nextString.equals(id.toString())) {
+      throw new ParseException(
+          "Start section " + id + " doesn't match else section " + nextString, tokens.nextLine);
     }
     tokens.advanceOver(TokenStream.Token.CLOSE_MUSTACHE);
   }

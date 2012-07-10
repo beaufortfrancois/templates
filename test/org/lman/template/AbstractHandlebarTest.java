@@ -226,5 +226,10 @@ public abstract class AbstractHandlebarTest {
   public void emptySections() {
     test("emptySections");
   }
+  
+  @Test
+  public void elseRendering() {
+    test("elseRendering");
+  }
 
 }

@@ -1,0 +1,51 @@
+Before
+{{?foo}}
+foo is true
+{{:}}
+foo is false
+{{/}}
+{{^bar}}
+bar is false
+{{:bar}}
+bar is true
+{{/bar}}
+baz is {{?baz}}{{baz}}{{:}}a tree{{/}}
+qux is
+{{?qux}}{{qux}}
+{{:qux}}underwater
+{{/qux}}
+quux is
+{{?quux}}
+out in space{{:quux}}underwater
+{{/quux}}
+corge is
+{{?corge}}
+a dog{{:}}a cat{{/}}
+grault is {{?grault}}true{{:}}{{/}}
+garply is {{^garply}}{{:}}true{{/}}
+waldo is {{?waldo}}{{:}}false{{/}}
+
+    Indented
+    {{?foo}}
+    foo is true
+    {{:}}
+    foo is false
+    {{/}}
+    {{^bar}}
+    bar is false
+    {{:bar}}
+    bar is true
+    {{/bar}}
+    baz is {{?baz}}{{baz}}{{:}}a tree{{/}}
+    qux is
+    {{?qux}}{{qux}}
+    {{:qux}}underwater
+    {{/qux}}
+    quux is
+    {{?quux}}
+    out in space{{:quux}}underwater
+    {{/quux}}
+    corge is
+    {{?corge}}
+    a dog{{:}}a cat{{/}}
+    After
