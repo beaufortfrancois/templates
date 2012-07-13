@@ -507,6 +507,13 @@ class PartialNode extends LeafNode
 class Token
   constructor: (@name, @text, @clazz) ->
 
+  elseNodeClass: () ->
+    if @clazz == VertedSectionNode
+      return InvertedSectionNode
+    if @clazz == InvertedSectionNode
+      return VertedSectionNode
+    throw new Error(@name + " can not have an else clause.")
+
 # List in order of longest to shortest, to avoid any prefix matching issues.
 Token.values = [
   new Token("OPEN_START_SECTION"         , "{{#", SectionNode),
@@ -514,6 +521,7 @@ Token.values = [
   new Token("OPEN_START_INVERTED_SECTION", "{{^", InvertedSectionNode),
   new Token("OPEN_START_JSON"            , "{{*", JsonNode),
   new Token("OPEN_START_PARTIAL"         , "{{+", PartialNode),
+  new Token("OPEN_ELSE"                  , "{{:", null),
   new Token("OPEN_END_SECTION"           , "{{/", null),
   new Token("OPEN_UNESCAPED_VARIABLE"    , "{{{", UnescapedVariableNode),
   new Token("CLOSE_MUSTACHE3"            , "}}}", null),
@@ -630,19 +638,32 @@ class Handlebar
           tokens.advanceOver(Token.CLOSE_MUSTACHE)
           nodes.push(partialNode)
 
-        when Token.OPEN_START_SECTION, \
-             Token.OPEN_START_VERTED_SECTION, \
-             Token.OPEN_START_INVERTED_SECTION
+        when Token.OPEN_START_SECTION
           id = @_openSectionOrTag(tokens)
           section = @_parseSection(tokens)
           @_closeSection(tokens, id)
           if section?
+            nodes.push(new SectionNode(id, section))
+
+        when Token.OPEN_START_VERTED_SECTION, \
+             Token.OPEN_START_INVERTED_SECTION
+          id = @_openSectionOrTag(tokens)
+          section = @_parseSection(tokens)
+          elseSection = null
+          if tokens.nextToken == Token.OPEN_ELSE
+            @_openElse(tokens, id)
+            elseSection = @_parseSection(tokens)
+          @_closeSection(tokens, id)
+          if section?
             nodes.push(new token.clazz(id, section))
+          if elseSection?
+            nodes.push(new (token.elseNodeClass())(id, elseSection))
 
         when Token.OPEN_COMMENT
           @_advanceOverComment(tokens)
 
-        when Token.OPEN_END_SECTION
+        when Token.OPEN_END_SECTION, \
+             Token.OPEN_ELSE
           # Handled after running parseSection within the SECTION cases, so this is a
           # terminating condition. If there *is* an orphaned OPEN_END_SECTION, it will be caught
           # by noticing that there are leftover tokens after termination.
@@ -711,7 +732,16 @@ class Handlebar
     nextString = tokens.advanceOverNextString()
     if nextString.length > 0 and id.toString() != nextString
       throw new ParseException(
-          "Start section " + id + " doesn't match end " + advanceOverNextString,
+          "Start section " + id + " doesn't match end " + nextString,
+          tokens.nextLine)
+    tokens.advanceOver(Token.CLOSE_MUSTACHE)
+
+  _openElse: (tokens, id) ->
+    tokens.advanceOver(Token.OPEN_ELSE)
+    nextString = tokens.advanceOverNextString()
+    if nextString.length > 0 and id.toString() != nextString
+      throw new ParseException(
+          "Start section " + id + " doesn't match else " + nextString,
           tokens.nextLine)
     tokens.advanceOver(Token.CLOSE_MUSTACHE)
 

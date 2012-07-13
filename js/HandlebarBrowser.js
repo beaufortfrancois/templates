@@ -1057,6 +1057,6 @@
 
   Handlebar.RenderResult = RenderResult;
 
-  exports["class"] = Handlebar;
+  window.Handlebar = Handlebar;
 
 }).call(this);
