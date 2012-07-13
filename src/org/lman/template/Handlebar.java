@@ -655,7 +655,7 @@ public class Handlebar {
     @Override
     public void render(RenderState renderState) {
       JsonView value = id.resolve(renderState.inSameContext().disableErrors());
-      if (value != null && shouldRender(value)) {
+      if (shouldRender(value)) {
         renderState.localContexts.addFirst(value);
         content.render(renderState);
         renderState.localContexts.removeFirst();
@@ -663,22 +663,22 @@ public class Handlebar {
     }
 
     static boolean shouldRender(JsonView value) {
+      if (value == null)
+        return false;
       switch (value.getType()) {
         case NULL:
           return false;
         case BOOLEAN:
           return value.asBoolean();
         case NUMBER:
-          return value.asNumber().floatValue() > 0;
         case STRING:
-          return value.asString().length() > 0;
+          return true;
         case ARRAY:
           return !value.asArrayIsEmpty();
         case OBJECT:
-          return !value.asObjectIsEmpty();
-        default:
-          throw new UnsupportedOperationException();
+          return true;
       }
+      throw new UnsupportedOperationException();
     }
 
     @Override
@@ -701,7 +701,7 @@ public class Handlebar {
     @Override
     public void render(RenderState renderState) {
       JsonView value = id.resolve(renderState.inSameContext().disableErrors());
-      if (value == null || !VertedSectionNode.shouldRender(value))
+      if (!VertedSectionNode.shouldRender(value))
         content.render(renderState);
     }
 
@@ -824,7 +824,7 @@ public class Handlebar {
         this.text = text;
         this.clazz = clazz;
       }
-      
+
       public Class<? extends Node> elseNodeClass() {
         if (this.clazz == VertedSectionNode.class)
           return InvertedSectionNode.class;
@@ -1107,7 +1107,7 @@ public class Handlebar {
     }
     tokens.advanceOver(TokenStream.Token.CLOSE_MUSTACHE);
   }
-  
+
   private void openElse(TokenStream tokens, Identifier id) {
     tokens.advanceOver(TokenStream.Token.OPEN_ELSE);
     String nextString = tokens.advanceOverNextString();

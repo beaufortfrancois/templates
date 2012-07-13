@@ -1,0 +1,23 @@
+{
+  "null": null,
+  "booleans": {
+    "true": true,
+    "false": false
+  },
+  "numbers": {
+    "zero": 0,
+    "one": 1
+  },
+  "strings": {
+    "empty": "",
+    "nonempty": "foo"
+  },
+  "arrays": {
+    "empty": [],
+    "nonempty": [1,2,3]
+  },
+  "objects": {
+    "empty": {},
+    "nonempty": {"foo": "bar"}
+  }
+}

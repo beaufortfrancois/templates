@@ -183,16 +183,6 @@ public abstract class AbstractHandlebarTest {
   }
 
   @Test
-  public void invertedStrings() {
-    test("invertedStrings");
-  }
-
-  @Test
-  public void vertedStrings() {
-    test("vertedStrings");
-  }
-
-  @Test
   public void hasPartial() {
     test("hasPartial", "hasPartial_partial");
   }
@@ -226,10 +216,20 @@ public abstract class AbstractHandlebarTest {
   public void emptySections() {
     test("emptySections");
   }
-  
+
   @Test
   public void elseRendering() {
     test("elseRendering");
+  }
+
+  @Test
+  public void existence() {
+    test("existence");
+  }
+
+  @Test
+  public void nonexistence() {
+    test("nonexistence");
   }
 
 }

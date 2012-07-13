@@ -414,7 +414,7 @@ class VertedSectionNode extends DecoratorNode
 
   render: (renderState) ->
     value = @_id.resolve(renderState.inSameContext().disableErrors())
-    if value? and VertedSectionNode.shouldRender(value)
+    if VertedSectionNode.shouldRender(value)
       renderState.localContexts.unshift(value)
       @_content.render(renderState)
       renderState.localContexts.shift()
@@ -423,17 +423,19 @@ class VertedSectionNode extends DecoratorNode
     return "{{?" + @_id + "}}" + @_content + "{{/" + @_id + "}}"
 
 VertedSectionNode.shouldRender = (value) ->
+  if not value?
+    return false
   type = typeof value
   if type == 'boolean'
     return value
-  else if type == 'number'
-    return value > 0
-  else if type == 'string'
+  if type == 'number'
+    return true
+  if type == 'string'
+    return true
+  if value instanceof Array
     return value.length > 0
-  else if value instanceof Array
-    return value.length > 0
-  else if type == 'object'
-    return Object.keys(value).length > 0
+  if type == 'object'
+    return true
   throw new Error("Unhandled type: " + type)
 
 class InvertedSectionNode extends DecoratorNode
@@ -443,7 +445,7 @@ class InvertedSectionNode extends DecoratorNode
 
   render: (renderState) ->
     value = @_id.resolve(renderState.inSameContext().disableErrors())
-    if not value? or not VertedSectionNode.shouldRender(value)
+    if not VertedSectionNode.shouldRender(value)
       @_content.render(renderState)
 
   toString: () ->

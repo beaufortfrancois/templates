@@ -660,7 +660,7 @@
     VertedSectionNode.prototype.render = function(renderState) {
       var value;
       value = this._id.resolve(renderState.inSameContext().disableErrors());
-      if ((value != null) && VertedSectionNode.shouldRender(value)) {
+      if (VertedSectionNode.shouldRender(value)) {
         renderState.localContexts.unshift(value);
         this._content.render(renderState);
         return renderState.localContexts.shift();
@@ -677,18 +677,13 @@
 
   VertedSectionNode.shouldRender = function(value) {
     var type;
+    if (!(value != null)) return false;
     type = typeof value;
-    if (type === 'boolean') {
-      return value;
-    } else if (type === 'number') {
-      return value > 0;
-    } else if (type === 'string') {
-      return value.length > 0;
-    } else if (value instanceof Array) {
-      return value.length > 0;
-    } else if (type === 'object') {
-      return Object.keys(value).length > 0;
-    }
+    if (type === 'boolean') return value;
+    if (type === 'number') return true;
+    if (type === 'string') return true;
+    if (value instanceof Array) return value.length > 0;
+    if (type === 'object') return true;
     throw new Error("Unhandled type: " + type);
   };
 
@@ -704,7 +699,7 @@
     InvertedSectionNode.prototype.render = function(renderState) {
       var value;
       value = this._id.resolve(renderState.inSameContext().disableErrors());
-      if (!(value != null) || !VertedSectionNode.shouldRender(value)) {
+      if (!VertedSectionNode.shouldRender(value)) {
         return this._content.render(renderState);
       }
     };

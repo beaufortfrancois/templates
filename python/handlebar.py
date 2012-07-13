@@ -138,16 +138,16 @@ class Identifier(object):
       return self._resolveFromContext(renderState.getFirstContext())
 
     resolved = self._resolveFromContexts(renderState.localContexts)
-    if not resolved:
+    if resolved == None:
       resolved = self._resolveFromContexts(renderState.globalContexts)
-    if not resolved:
+    if resolved == None:
       renderState.addError("Couldn't resolve identifier ", self._path)
     return resolved
 
   def _resolveFromContexts(self, contexts):
     for context in contexts:
       resolved = self._resolveFromContext(context)
-      if resolved:
+      if resolved != None:
         return resolved
     return None
 
@@ -156,7 +156,7 @@ class Identifier(object):
     for next in self._path:
       # Only require that contexts provide a get method, meaning that callers
       # can provide dict-like contexts (for example, to populate values lazily).
-      if not result or not getattr(result, "get", None):
+      if result == None or not getattr(result, "get", None):
         return None
       result = result.get(next)
     return result
@@ -348,7 +348,7 @@ class EscapedVariableNode(LeafNode):
 
   def render(self, renderState):
     value = self._id.resolve(renderState)
-    if value:
+    if value != None:
       self._appendEscapedHtml(renderState.text, str(value))
 
   def _appendEscapedHtml(self, escaped, unescaped):
@@ -371,7 +371,7 @@ class UnescapedVariableNode(LeafNode):
 
   def render(self, renderState):
     value = self._id.resolve(renderState)
-    if value:
+    if value != None:
       renderState.text.append(value)
 
 class SectionNode(DecoratorNode):
@@ -383,7 +383,7 @@ class SectionNode(DecoratorNode):
 
   def render(self, renderState):
     value = self._id.resolve(renderState)
-    if not value:
+    if value == None:
       return
 
     type_ = type(value)
@@ -409,23 +409,25 @@ class VertedSectionNode(DecoratorNode):
 
   def render(self, renderState):
     value = self._id.resolve(renderState.inSameContext().disableErrors())
-    if value and _VertedSectionNodeShouldRender(value):
+    if _VertedSectionNodeShouldRender(value):
       renderState.localContexts.insert(0, value)
       self._content.render(renderState)
       renderState.localContexts.pop(0)
 
 def _VertedSectionNodeShouldRender(value):
-  type_ = type(value)
   if value == None:
     return False
-  elif type_ == bool:
+  type_ = type(value)
+  if type_ == bool:
     return value
-  elif type_ == int or type_ == float:
-    return value > 0
-  elif type_ == str or type_ == unicode:
-    return value != ''
-  elif type_ == list or type_ == dict:
+  if type_ == int or type_ == float:
+    return True
+  if type_ == str or type_ == unicode:
+    return True
+  if type_ == list:
     return len(value) > 0
+  if type_ == dict:
+    return True
   raise TypeError("Unhandled type: " + str(type_))
 
 class InvertedSectionNode(DecoratorNode):
@@ -437,7 +439,7 @@ class InvertedSectionNode(DecoratorNode):
 
   def render(self, renderState):
     value = self._id.resolve(renderState.inSameContext().disableErrors())
-    if not value or not _VertedSectionNodeShouldRender(value):
+    if not _VertedSectionNodeShouldRender(value):
       self._content.render(renderState)
 
 class JsonNode(LeafNode):
@@ -449,7 +451,7 @@ class JsonNode(LeafNode):
 
   def render(self, renderState):
     value = self._id.resolve(renderState)
-    if value:
+    if value != None:
       renderState.text.append(json.dumps(value, separators=(',',':')))
 
 class PartialNode(LeafNode):
@@ -558,7 +560,7 @@ class TokenStream(object):
         self.nextToken = token
         break
 
-    if self.nextToken == None:
+    if not self.nextToken:
       self.nextToken = Token.CHARACTER
 
     self.nextContents = self._remainder[0:len(self.nextToken.text)]
@@ -673,8 +675,8 @@ class Handlebar(object):
         if nextNode:
           nextNode.trimStartingNewLine()
       elif isinstance(node, LeafNode) and \
-           (previousNode == None or previousNode.endsWithEmptyLine()) and \
-           (nextNode == None or nextNode.startsWithNewLine()):
+           (not previousNode or previousNode.endsWithEmptyLine()) and \
+           (not nextNode or nextNode.startsWithNewLine()):
         indentation = 0
         if previousNode:
           indentation = previousNode.trimEndingSpaces()
