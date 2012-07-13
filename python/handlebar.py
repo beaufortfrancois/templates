@@ -62,12 +62,15 @@ class StringBuilder(object):
   """
   def __init__(self):
     self._buf = []
+    self._length = 0
 
   def __len__(self):
-    return len(self._buf)
+    return self._length
 
   def append(self, obj):
-    self._buf.append(str(obj))
+    string = str(obj)
+    self._buf.append(string)
+    self._length += len(string)
 
   def toString(self):
     return ''.join(self._buf)
@@ -88,7 +91,7 @@ class RenderState(object):
   def getFirstContext(self):
     if len(self.localContexts) > 0:
       return self.localContexts[0]
-    elif len(self.globalContexts) > 0:
+    if len(self.globalContexts) > 0:
       return self.globalContexts[0]
     return None
 
@@ -246,7 +249,7 @@ class IndentedNode(DecoratorNode):
     self._indent(renderState.text)
     for i, c in enumerate(contentRenderState.text.toString()):
       renderState.text.append(c)
-      if c == '\n' and i < len(renderState.text) - 1:
+      if c == '\n' and i < len(contentRenderState.text) - 1:
         self._indent(renderState.text)
     renderState.text.append('\n')
 
@@ -384,9 +387,7 @@ class SectionNode(DecoratorNode):
       return
 
     type_ = type(value)
-    if value == None:
-      pass
-    elif type_ == list:
+    if type_ == list:
       for item in value:
         renderState.localContexts.insert(0, item)
         self._content.render(renderState)
@@ -407,7 +408,7 @@ class VertedSectionNode(DecoratorNode):
     self._id = id
 
   def render(self, renderState):
-    value = self._id.resolve(renderState)
+    value = self._id.resolve(renderState.inSameContext().disableErrors())
     if value and _VertedSectionNodeShouldRender(value):
       renderState.localContexts.insert(0, value)
       self._content.render(renderState)
@@ -435,7 +436,7 @@ class InvertedSectionNode(DecoratorNode):
     self._id = id
 
   def render(self, renderState):
-    value = self._id.resolve(renderState)
+    value = self._id.resolve(renderState.inSameContext().disableErrors())
     if not value or not _VertedSectionNodeShouldRender(value):
       self._content.render(renderState)
 
@@ -592,7 +593,7 @@ class Handlebar(object):
     tokens = TokenStream(template)
     self._topNode = self._parseSection(tokens)
     if not self._topNode:
-      raise ParseException("Template is empty")
+      raise ParseException("Template is empty", tokens.nextLine)
     if tokens.hasNext():
       raise ParseException("There are still tokens remaining, "
                            "was there an end-section without a start-section:",

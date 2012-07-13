@@ -353,7 +353,7 @@ public class Handlebar {
       for (int i = 0; i < contentRenderState.text.length(); i++) {
         char c = contentRenderState.text.charAt(i);
         renderState.text.append(c);
-        if (c == '\n' && i < renderState.text.length() - 1)
+        if (c == '\n' && i < contentRenderState.text.length() - 1)
           indent(renderState.text);
       }
       renderState.text.append('\n');
@@ -923,7 +923,6 @@ public class Handlebar {
     this.topNode = parseSection(tokens);
     if (topNode == null)
       throw new ParseException("Template is empty", new Line(0));
-    System.out.println(topNode);
     if (tokens.hasNext()) {
       throw new ParseException(
           "There are still tokens remaining, was there an end-section without a start-section?",

@@ -12,7 +12,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-ParseException = Error
+startsWith = (string, prefix) ->
+  return string.slice(0, prefix.length) == prefix
+
+endsWith = (string, suffix) ->
+  return string.slice(string.length - suffix.length) == suffix
+
+extend = (array, extendWith) ->
+  for item in extendWith
+    array.push(item)
+
+class ParseException extends Error
+  constructor: (error, line) ->
+    super(error + " (line " + line + ")")
 
 class RenderResult
   constructor: (@text, @errors) ->
@@ -33,124 +45,382 @@ class RenderResult
 class StringBuilder
   constructor: () ->
     @_buffer = []
+    @length = 0
 
   append: (s) ->
-    @_buffer.push(s.toString())
+    string = s.toString()
+    @_buffer.push(string)
+    @length += string.length
 
   toString: () ->
-    @_buffer.join('')
+    return @_buffer.join('')
 
-class PathIdentifier
-  constructor: (name) ->
-    if name.length == 0
-      throw new ParseException("Cannot have empty identifiers")
-    if not /^[a-zA-Z0-9._]*$/.test(name)
-      throw new ParseException(name + " is not a valid identifier")
-    @path = name.split(".")
+class RenderState
+  constructor: (@globalContexts, @localContexts) ->
+    @text = new StringBuilder()
+    @errors = []
+    @_errorsDisabled = false
 
-  resolve: (contexts, errors) ->
-    resolved = null
-    for context in contexts
-      if not context?
-        continue
-      resolved = @_resolveFrom(context)
-      if resolved?
-        return resolved
-    Handlebar.renderError(errors, "Couldn't resolve identifier ", @path, " in ", contexts)
+  inSameContext: () ->
+    return new RenderState(@globalContexts, @localContexts)
+
+  getFirstContext: () ->
+    if @localContexts.length > 0
+      return @localContexts[0]
+    if @globalContexts.length > 0
+      return @globalContexts[0]
     return null
 
-  _resolveFrom: (context) ->
+  disableErrors: () ->
+    @_errorsDisabled = true
+    return this
+
+  addError: (messages...) ->
+    if @_errorsDisabled
+      return this
+    buf = new StringBuilder()
+    for message in messages
+      buf.append(message)
+    @errors.push(buf.toString())
+    return this
+
+  getResult: () ->
+    return new RenderResult(@text.toString(), @errors)
+
+  toString: () ->
+    listToString = (list) ->
+      if (list.length == 0)
+        return "[]"
+      buf = new StringBuilder()
+      buf.append("[")
+      is_first = true
+      for e in list
+        if not is_first
+          buf.append(",")
+          is_first = false
+        buf.append(JSON.stringify(e))
+      buf.append("]")
+      return buf.toString()
+
+    return "RenderState {\"" +
+           "  text: " + @text + "\n" +
+           "  errors: " + listToString(@errors) + "\n" +
+           "  _errorsDisabled: " + @_errorsDisabled + "\n" +
+           "  localContext: " + listToString(@localContexts) + "\n" +
+           "  globalContext: " + listToString(@globalContexts) + "}"
+
+class Identifier
+  constructor: (name, line) ->
+    @_isThis = (name == '@')
+    if @_isThis
+      @_startsWithThis = false
+      @_path = []
+      return
+
+    thisDot = '@.'
+    @_startsWithThis = startsWith(name, thisDot)
+    if @_startsWithThis
+      name = name.slice(thisDot.length)
+
+    if not /^[a-zA-Z0-9._]*$/.test(name)
+      throw new ParseException(name + " is not a valid identifier", line)
+    @_path = name.split(".")
+
+  resolve: (renderState) ->
+    if @_isThis
+      return renderState.getFirstContext()
+
+    if @_startsWithThis
+      return @_resolveFromContext(renderState.getFirstContext())
+
+    resolved = @_resolveFromContexts(renderState.localContexts)
+    if not resolved?
+      resolved = @_resolveFromContexts(renderState.globalContexts)
+    if not resolved?
+      renderState.addError("Couldn't resolve identifier ", @_path)
+    return resolved
+
+  _resolveFromContexts: (contexts) ->
+    for context in contexts
+      resolved = @_resolveFromContext(context)
+      if resolved?
+        return resolved
+    return null
+
+  _resolveFromContext: (context) ->
     result = context
-    for next in @path
-      if not result?
+    for next in @_path
+      if not result? or typeof(result) != 'object'
         return null
       result = result[next]
     return result
 
   toString: () ->
-    return @path.join('.')
+    if @_isThis
+      return '@'
+    name = @_path.join('.')
+    return if @_startsWithThis then ('@.' + name) else name
 
-class ThisIdentifier
-  constructor: () ->
+class Line
+  constructor: (@number) ->
 
-  resolve: (contexts, errors) ->
-    return contexts[0]
+class LeafNode
+  constructor: (line) ->
+    @_line = line
+
+  startsWithNewLine: () ->
+    return false
+
+  trimStartingNewLine: () ->
+
+  trimEndingSpaces: () ->
+    return 0
+
+  trimEndingNewLine: () ->
+
+  endsWithEmptyLine: () ->
+    return false
+
+  getStartLine: () ->
+    return @_line
+
+  getEndLine: () ->
+    return @_line
+
+class DecoratorNode
+  constructor: (content) ->
+    @_content = content
+
+  startsWithNewLine: () ->
+    return @_content.startsWithNewLine()
+
+  trimStartingNewLine: () ->
+    @_content.trimStartingNewLine()
+
+  trimEndingSpaces: () ->
+    return @_content.trimEndingSpaces()
+
+  trimEndingNewLine: () ->
+    @_content.trimEndingNewLine()
+
+  endsWithEmptyLine: () ->
+    return @_content.endsWithEmptyLine()
+
+  getStartLine: () ->
+    return @_content.getStartLine()
+
+  getEndLine: () ->
+    return @_content.getEndLine()
+
+class InlineNode extends DecoratorNode
+  contructor: (content) ->
+    super(content)
+
+  render: (renderState) ->
+    contentRenderState = renderState.inSameContext()
+    @_content.render(contentRenderState)
+
+    extend(renderState.errors, contentRenderState.errors)
+
+    for c in contentRenderState.text.toString()
+      if c != '\n'
+        renderState.text.append(c)
 
   toString: () ->
-    return '@'
+    return "INLINE(" + @_content + ")"
 
-# Nodes which are "self closing", e.g. {{foo}}, {{*foo}}.
-class SelfClosingNode
-  init: (id) ->
-    @id = id
+class IndentedNode extends DecoratorNode
+  constructor: (content, indentation) ->
+    super(content)
+    @_indentation = indentation
 
-# Nodes which are not self closing, and have 0..n children.
-class HasChildrenNode
-  init: (id, children) ->
-    @id = id
-    @children = children
+  render: (renderState) ->
+    contentRenderState = renderState.inSameContext()
+    @_content.render(contentRenderState)
 
-# Just a string.
+    extend(renderState.errors, contentRenderState.errors)
+
+    @_indent(renderState.text)
+    for c, i in contentRenderState.text.toString()
+      renderState.text.append(c)
+      if c == '\n' and i < contentRenderState.text.length - 1
+        @_indent(renderState.text)
+    renderState.text.append('\n')
+
+  _indent: (buf) ->
+    iterations = @_indentation
+    while iterations-- > 0
+      buf.append(' ')
+
+  toString: () ->
+    return "INDENTED(" + @_indentation + "," + @_content + ")"
+
+class BlockNode extends DecoratorNode
+  constructor: (content) ->
+    super(content)
+    content.trimStartingNewLine()
+    content.trimEndingSpaces()
+
+  render: (renderState) ->
+    @_content.render(renderState)
+
+  toString: () ->
+    return "BLOCK(" + @_content + ")"
+
+class NodeCollection
+  constructor: (nodes) ->
+    if nodes.length == 0
+      throw new Error()
+    @_nodes = nodes
+
+  render: (renderState) ->
+    for node in @_nodes
+      node.render(renderState)
+
+  startsWithNewLine: () ->
+    return @_nodes[0].startsWithNewLine()
+
+  trimStartingNewLine: () ->
+    @_nodes[0].trimStartingNewLine()
+
+  trimEndingSpaces: () ->
+    return @_nodes[@_nodes.length - 1].trimEndingSpaces()
+
+  trimEndingNewLine: () ->
+    @_nodes[@_nodes.length - 1].trimEndingNewLine()
+
+  endsWithNewLine: () ->
+    return @_nodes[@_nodes.length - 1].endsWithEmptyLine()
+
+  getStartLine: () ->
+    return @_nodes[0].getStartLine()
+
+  getEndLine: () ->
+    return @_nodes[@_nodes.length - 1].getEndLine()
+
+  toString: () ->
+    buf = new StringBuilder()
+    for node in @_nodes
+      buf.append(node)
+    return buf.toString()
+
 class StringNode
-  constructor: (@string) ->
+  constructor: (string, startLine, endLine) ->
+    @_string = string
+    @_startLine = startLine
+    @_endLine = endLine
 
-  render: (buf, contexts, errors) ->
-    buf.append(@string)
+  render: (renderState) ->
+    renderState.text.append(@_string)
 
-# {{foo}}
-class EscapedVariableNode extends SelfClosingNode
-  render: (buf, contexts, errors) ->
-    value = @id.resolve(contexts, errors)
+  startsWithNewLine: () ->
+    return startsWith(@_string, '\n')
+
+  trimStartingNewLine: () ->
+    if @startsWithNewLine()
+      @_string = @_string.slice(1)
+
+  trimEndingSpaces: () ->
+    originalLength = @_string.length
+    @_string = @_string.slice(0, @_lastIndexOfSpaces())
+    return originalLength - @_string.length
+
+  trimEndingNewLine: () ->
+    if endsWith(@_string, '\n')
+      @_string = @_string.slice(0, @_string.length - 1)
+
+  endsWithEmptyLine: () ->
+    index = @_lastIndexOfSpaces()
+    return index == 0 or @_string[index - 1] == '\n'
+
+  _lastIndexOfSpaces: () ->
+    index = @_string.length
+    while index > 0 and @_string[index - 1] == ' '
+      index--
+    return index
+
+  getStartLine: () ->
+    return @_startLine
+
+  getEndLine: () ->
+    return @_endLine
+
+  toString: () ->
+    return "STRING(" + @_string + ")"
+
+class EscapedVariableNode extends LeafNode
+  constructor: (id, line) ->
+    super(line)
+    @_id = id
+
+  render: (renderState) ->
+    value = @_id.resolve(renderState)
     if value?
-      buf.append(@_htmlEscape(value.toString()))
+      @_appendEscapedHtml(renderState.text, value.toString())
 
-  _htmlEscape: (unescaped) ->
-    escaped = new StringBuilder()
+  _appendEscapedHtml: (escaped, unescaped) ->
     for c in unescaped
       switch c
         when '<' then escaped.append("&lt;")
         when '>' then escaped.append("&gt;")
         when '&' then escaped.append("&amp;")
         else escaped.append(c)
-    return escaped.toString()
 
-# {{{foo}}}
-class UnescapedVariableNode extends SelfClosingNode
-  render: (buf, contexts, errors) ->
-    value = @id.resolve(contexts, errors)
+  toString: () ->
+    return "{{" + @_id + "}}"
+
+class UnescapedVariableNode extends LeafNode
+  constructor: (id, line) ->
+    super(line)
+    @_id = id
+
+  render: (renderState) ->
+    value = @_id.resolve(renderState)
     if value?
-      buf.append(value)
+      renderState.text.append(value)
 
-# {{#foo}} ... {{/}}
-class SectionNode extends HasChildrenNode
-  render: (buf, contexts, errors) ->
-    value = @id.resolve(contexts, errors)
+  toString: () ->
+    return "{{{" + @_id + "}}}"
+
+class SectionNode extends DecoratorNode
+  constructor: (id, content) ->
+    super(content)
+    @_id = id
+
+  render: (renderState) ->
+    value = @_id.resolve(renderState)
     if not value?
       return
 
-    type = typeof value
-    if type == null
-      # Nothing.
-    else if type == 'boolean' or type == 'number' or type == 'string'
-      Handlebar.renderError(errors, "{{#", @id, "}} cannot be rendered with a " + type)
-    else if value instanceof Array
+    if value instanceof Array
       for item in value
-        contexts.unshift(item)
-        Handlebar.renderNodes(buf, @children, contexts, errors)
-        contexts.shift()
+        renderState.localContexts.unshift(item)
+        @_content.render(renderState)
+        renderState.localContexts.shift()
+    else if typeof(value) == 'object'
+      renderState.localContexts.unshift(value)
+      @_content.render(renderState)
+      renderState.localContexts.shift()
     else
-      contexts.unshift(value)
-      Handlebar.renderNodes(buf, @children, contexts, errors)
-      contexts.shift()
+      renderState.addError("{{#", @_id, "}} cannot be rendered with that type")
 
-# {{?foo}} ... {{/}}
-class VertedSectionNode extends HasChildrenNode
-  render: (buf, contexts, errors) ->
-    value = @id.resolve(contexts, errors)
+  toString: () ->
+    return "{{#" + @_id + "}}" + @_content + "{{/" + @_id + "}}"
+
+class VertedSectionNode extends DecoratorNode
+  constructor: (id, content) ->
+    super(content)
+    @_id = id
+
+  render: (renderState) ->
+    value = @_id.resolve(renderState.inSameContext().disableErrors())
     if value? and VertedSectionNode.shouldRender(value)
-      contexts.unshift(value)
-      Handlebar.renderNodes(buf, @children, contexts, errors)
-      contexts.shift()
+      renderState.localContexts.unshift(value)
+      @_content.render(renderState)
+      renderState.localContexts.shift()
+
+  toString: () ->
+    return "{{?" + @_id + "}}" + @_content + "{{/" + @_id + "}}"
 
 VertedSectionNode.shouldRender = (value) ->
   type = typeof value
@@ -166,56 +436,73 @@ VertedSectionNode.shouldRender = (value) ->
     return Object.keys(value).length > 0
   throw new Error("Unhandled type: " + type)
 
-# {{^foo}} ... {{/}}
-class InvertedSectionNode extends HasChildrenNode
-  render: (buf, contexts, errors) ->
-    value = @id.resolve(contexts, errors)
-    if not value? or !VertedSectionNode.shouldRender(value)
-      Handlebar.renderNodes(buf, @children, contexts, errors)
+class InvertedSectionNode extends DecoratorNode
+  constructor: (id, content) ->
+    super(content)
+    @_id = id
 
-# {{*foo}}
-class JsonNode extends SelfClosingNode
-  render: (buf, contexts, errors) ->
-    value = @id.resolve(contexts, errors)
+  render: (renderState) ->
+    value = @_id.resolve(renderState.inSameContext().disableErrors())
+    if not value? or not VertedSectionNode.shouldRender(value)
+      @_content.render(renderState)
+
+  toString: () ->
+    return "{{^" + @_id + "}}" + @_content + "{{/" + @_id + "}}"
+
+class JsonNode extends LeafNode
+  constructor: (id, line) ->
+    super(line)
+    @_id = id
+
+  render: (renderState) ->
+    value = @_id.resolve(renderState)
     if value?
-      buf.append(JSON.stringify(value))
+      renderState.text.append(JSON.stringify(value))
 
-# {{+foo}}
-class PartialNode extends SelfClosingNode
-  render: (buf, contexts, errors) ->
-    value = @id.resolve(contexts, errors)
-    if not value instanceof Handlebar
-      Handlebar.renderError(errors, id, " didn't resolve to a Handlebar")
+  toString: () ->
+    return "{{*" + @_id + "}}"
+
+class PartialNode extends LeafNode
+  constructor: (id, line) ->
+    super(line)
+    @_id = id
+    @_args = null
+
+  render: (renderState) ->
+    value = @_id.resolve(renderState)
+    if not (value instanceof Handlebar)
+      renderState.addError(@_id, " didn't resolve to a Handlebar")
       return
-    Handlebar.renderNodes(buf, value.nodes, contexts, errors)
 
-# {{:foo}}
-class SwitchNode
-  constructor: (@id) ->
-    @_cases = {}
+    argContext = []
+    if renderState.localContexts.length > 0
+      argContext.push(renderState.localContexts[0])
 
-  addCase: (caseValue, caseNode) ->
-    @_cases[caseValue] = caseNode
+    if @_args?
+      argContextMap = {}
+      for own key, valueId of @_args
+        context = valueId.resolve(renderState)
+        if context?
+          argContextMap[key] = context
+      argContext.push(argContextMap)
 
-  render: (buf, contexts, errors) ->
-    value = @id.resolve(contexts, errors)
-    if not value?
-      Handlebar.renderError(errors, id, " didn't resolve to any value")
-      return
-    if typeof(value) != 'string'
-      Handlebar.renderError(errors, id, " didn't resolve to a String, instead " + typeof(value))
-      return
-    caseNode = @_cases[value]
-    if caseNode?
-      caseNode.render(buf, contexts, errors)
+    partialRenderState = new RenderState(renderState.globalContexts, argContext)
+    value._topNode.render(partialRenderState)
 
-# {{=foo}}
-class CaseNode
-  constructor: (@children) ->
+    text = partialRenderState.text.toString()
+    if text.length > 0 and text[text.length - 1] == '\n'
+      text = text.slice(0, text.length - 1)
 
-  render: (buf, contexts, errors) ->
-    for child in @children
-      child.render(buf, contexts, errors)
+    renderState.text.append(text)
+    extend(renderState.errors, partialRenderState.errors)
+
+  addArgument: (key, valueId) ->
+    if not @_args?
+      @_args = {}
+    @_args[key] = valueId
+
+  toString: () ->
+    return "{{+" + @_id + "}}"
 
 class Token
   constructor: (@name, @text, @clazz) ->
@@ -227,11 +514,11 @@ Token.values = [
   new Token("OPEN_START_INVERTED_SECTION", "{{^", InvertedSectionNode),
   new Token("OPEN_START_JSON"            , "{{*", JsonNode),
   new Token("OPEN_START_PARTIAL"         , "{{+", PartialNode),
-  new Token("OPEN_START_SWITCH"          , "{{:", SwitchNode),
-  new Token("OPEN_CASE"                  , "{{=", CaseNode),
   new Token("OPEN_END_SECTION"           , "{{/", null),
   new Token("OPEN_UNESCAPED_VARIABLE"    , "{{{", UnescapedVariableNode),
   new Token("CLOSE_MUSTACHE3"            , "}}}", null),
+  new Token("OPEN_COMMENT"               , "{{-", null),
+  new Token("CLOSE_COMMENT"              , "-}}", null),
   new Token("OPEN_VARIABLE"              , "{{" , EscapedVariableNode),
   new Token("CLOSE_MUSTACHE"             , "}}" , null),
   new Token("CHARACTER"                  , "."  , StringNode)
@@ -246,23 +533,22 @@ Token.values = [
 # Tokeniser for template parsing.
 class TokenStream
   constructor: (string) ->
-    @nextToken = null
     @_remainder = string
-    @_nextContents = null
+
+    @nextToken = null
+    @nextContents = null
+    @nextLine = new Line(1)
     @advance()
 
   hasNext: () ->
     return @nextToken?
 
-  advanceOver: (token) ->
-    if @nextToken != token
-      throw new ParseException(
-          "Expecting token " + token.name + " but got " + @nextToken.name)
-    return @advance()
-
   advance: () ->
+    if @nextContents == '\n'
+      @nextLine = new Line(@nextLine.number + 1)
+
     @nextToken = null
-    @_nextContents = null
+    @nextContents = null
 
     if @_remainder.length == 0
       return null
@@ -275,103 +561,86 @@ class TokenStream
     if @nextToken == null
       @nextToken = Token.CHARACTER
 
-    @_nextContents = @_remainder.slice(0, @nextToken.text.length)
+    @nextContents = @_remainder.slice(0, @nextToken.text.length)
     @_remainder = @_remainder.slice(@nextToken.text.length)
-    return @nextToken
+    return @
 
-  nextString: () ->
+  advanceOver: (token, excluded) ->
+    if @nextToken != token
+      throw new ParseException(
+          "Expecting token " + token.name + " but got " + @nextToken.name,
+          @nextLine)
+    return @advance()
+  
+  advanceOverNextString: (excluded) ->
     buf = new StringBuilder()
-    while @nextToken == Token.CHARACTER
-      buf.append(@_nextContents)
+    while @nextToken == Token.CHARACTER and
+          (not excluded? or excluded.indexOf(@nextContents) == -1)
+      buf.append(@nextContents)
       @advance()
     return buf.toString()
-
-createIdentifier = (path) ->
-  if path == '@'
-    return new ThisIdentifier()
-  else
-    return new PathIdentifier(path)
 
 class Handlebar
   # Creates a new {@link Handlebar} parsed from a string.
   constructor: (template) ->
-    @nodes = []
-    @_parseTemplate(template, @nodes)
-
-  _parseTemplate: (template, nodes) ->
+    @source = template
     tokens = new TokenStream(template)
-    @_parseSection(tokens, nodes)
+    @_topNode =  @_parseSection(tokens)
+    if not @_topNode?
+      throw new ParseException("Template is empty", tokens.nextLine)
     if tokens.hasNext()
-      throw new ParseException(
-          "There are still tokens remaining, was there an end-section without a start-section?")
+      throw new ParseSection("There are still tokens remaining, was there an "
+                             "end-section without a start-section?",
+                             tokens.nextLine)
 
-  _parseSection: (tokens, nodes) ->
+  _parseSection: (tokens) ->
+    nodes = []
     sectionEnded = false
+
     while tokens.hasNext() && !sectionEnded
-      switch tokens.nextToken
+      token = tokens.nextToken
+
+      switch token
         when Token.CHARACTER
-          nodes.push(new StringNode(tokens.nextString()))
+          startLine = tokens.nextLine
+          string = tokens.advanceOverNextString()
+          nodes.push(new StringNode(string, startLine, tokens.nextLine))
 
         when Token.OPEN_VARIABLE, \
              Token.OPEN_UNESCAPED_VARIABLE, \
-             Token.OPEN_START_JSON, \
-             Token.OPEN_START_PARTIAL
-          token = tokens.nextToken
-          id = @_openSection(tokens)
+             Token.OPEN_START_JSON
+          id = @_openSectionOrTag(tokens)
+          nodes.push(new token.clazz(id, tokens.nextLine))
 
-          try
-            node = new token.clazz()
-            node.init(id)
-            nodes.push(node)
-          catch e
-            console.warn(e)
-            throw new ParseException(e.message)
+        when Token.OPEN_START_PARTIAL
+          tokens.advance()
+          id = new Identifier(tokens.advanceOverNextString(' '),
+                              tokens.nextLine)
+          partialNode = new PartialNode(id, tokens.nextLine)
+
+          while tokens.nextToken == Token.CHARACTER
+            tokens.advance()
+            key = tokens.advanceOverNextString(':')
+            tokens.advance()
+            partialNode.addArgument(
+                key,
+                new Identifier(tokens.advanceOverNextString(' '),
+                               tokens.nextLine))
+
+          tokens.advanceOver(Token.CLOSE_MUSTACHE)
+          nodes.push(partialNode)
 
         when Token.OPEN_START_SECTION, \
              Token.OPEN_START_VERTED_SECTION, \
              Token.OPEN_START_INVERTED_SECTION
-          token = tokens.nextToken
-          id = @_openSection(tokens)
-
-          children = []
-          @_parseSection(tokens, children)
+          id = @_openSectionOrTag(tokens)
+          section = @_parseSection(tokens)
           @_closeSection(tokens, id)
+          if section?
+            nodes.push(new token.clazz(id, section))
 
-          try
-            node = new token.clazz()
-            node.init(id, children)
-            nodes.push(node)
-          catch e
-            console.warn(e)
-            throw new ParseException(e.message)
-
-        when Token.OPEN_START_SWITCH
-          id = @_openSection(tokens)
-          # Chew up anything between here and the first case (or the closing of a section, if
-          # needs be).
-          # TODO: this wouldn't be necessary if we did the blank line optimisation thing.
-          while tokens.nextToken == Token.CHARACTER
-            tokens.advanceOver(Token.CHARACTER)
-
-          switchNode = new SwitchNode(id)
-          nodes.push(switchNode)
-
-          while tokens.hasNext() && tokens.nextToken == Token.OPEN_CASE
-            tokens.advanceOver(Token.OPEN_CASE)
-            caseValue = tokens.nextString()
-            tokens.advanceOver(Token.CLOSE_MUSTACHE)
-
-            caseChildren = []
-            # TODO: make parseSection take terminating nodes, pass in OPEN_CASE.
-            @_parseSection(tokens, caseChildren)
-
-            switchNode.addCase(caseValue, new CaseNode(caseChildren))
-
-          @_closeSection(tokens, id)
-        
-        when Token.OPEN_CASE
-          # See below.
-          sectionEnded = true
+        when Token.OPEN_COMMENT
+          @_advanceOverComment(tokens)
 
         when Token.OPEN_END_SECTION
           # Handled after running parseSection within the SECTION cases, so this is a
@@ -380,12 +649,57 @@ class Handlebar
           sectionEnded = true
         
         when Token.CLOSE_MUSTACHE
-          throw new ParseException("Orphaned " + tokens.nextToken)
+          throw new ParseException("Orphaned " + tokens.nextToken,
+                                   tokens.nextLine)
 
-  _openSection: (tokens) ->
+    for node, i in nodes
+      if node instanceof StringNode
+        continue
+
+      previousNode = if (i > 0) then nodes[i - 1] else null
+      nextNode = if (i < nodes.length - 1) then nodes[i + 1] else null
+      renderedNode = null
+
+      if node.getStartLine() != node.getEndLine()
+        renderedNode = new BlockNode(node)
+        if previousNode?
+          previousNode.trimEndingSpaces()
+        if nextNode?
+          nextNode.trimStartingNewLine()
+      else if (node instanceof LeafNode) and
+              (not previousNode? or previousNode.endsWithEmptyLine()) and
+              (not nextNode? or nextNode.startsWithNewLine())
+        indentation = 0
+        if previousNode?
+          indentation = previousNode.trimEndingSpaces()
+        if nextNode?
+          nextNode.trimStartingNewLine()
+        renderedNode = new IndentedNode(node, indentation)
+      else
+        renderedNode = new InlineNode(node)
+
+      nodes[i] = renderedNode
+
+    if nodes.length == 0
+      return null
+    else if nodes.length == 1
+      return nodes[0]
+    return new NodeCollection(nodes)
+
+  _advanceOverComment: (tokens) ->
+    tokens.advanceOver(Token.OPEN_COMMENT)
+    depth = 1
+    while tokens.hasNext() and depth > 0
+      if tokens.nextToken == Token.OPEN_COMMENT
+        depth++
+      else if tokens.nextToken == Token.CLOSE_COMMENT
+        depth--
+      tokens.advance()
+
+  _openSectionOrTag: (tokens) ->
     openToken = tokens.nextToken
     tokens.advance()
-    id = createIdentifier(tokens.nextString())
+    id = new Identifier(tokens.advanceOverNextString(), tokens.nextLine)
     if openToken == Token.OPEN_UNESCAPED_VARIABLE
       tokens.advanceOver(Token.CLOSE_MUSTACHE3)
     else
@@ -394,33 +708,20 @@ class Handlebar
 
   _closeSection: (tokens, id) ->
     tokens.advanceOver(Token.OPEN_END_SECTION)
-    nextString = tokens.nextString()
-    if nextString.length > 0 && id.toString() != nextString
+    nextString = tokens.advanceOverNextString()
+    if nextString.length > 0 and id.toString() != nextString
       throw new ParseException(
-          "Start section " + id + " doesn't match end section " + nextString)
+          "Start section " + id + " doesn't match end " + advanceOverNextString,
+          tokens.nextLine)
     tokens.advanceOver(Token.CLOSE_MUSTACHE)
 
-  # Renders the template given some number of objects to take variables from.
   render: (contexts...) ->
-    contextDeque = []
+    globalContexts = []
     for context in contexts
-      contextDeque.push(context)
-    buf = new StringBuilder()
-    errors = []
-    Handlebar.renderNodes(buf, @nodes, contextDeque, errors)
-    return new RenderResult(buf.toString(), errors)
-
-Handlebar.renderNodes = (buf, nodes, contexts, errors) ->
-  for node in nodes
-    node.render(buf, contexts, errors)
-  
-Handlebar.renderError = (errors, messages...) ->
-  if not errors?
-    return
-  buf = new StringBuilder()
-  for message in messages
-    buf.append(message)
-  errors.push(buf.toString())
+      globalContexts.push(context)
+    renderState = new RenderState(globalContexts, [])
+    @_topNode.render(renderState)
+    return renderState.getResult()
 
 Handlebar.RenderResult = RenderResult
 exports.class = Handlebar

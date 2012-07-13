@@ -45,5 +45,5 @@ for (var i = 4; i < argv.length; i++) {
 }
 
 var template = new Handlebar(template);
-var renderResult = template.render(json, { templates: partialTemplates });
+var renderResult = template.render(json, { partials: partialTemplates });
 process.stdout.write(renderResult.text);
