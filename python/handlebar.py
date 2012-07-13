@@ -493,6 +493,10 @@ class PartialNode(LeafNode):
       self._args = {}
     self._args[key] = valueId
 
+# List of tokens in order of longest to shortest, to avoid any prefix matching
+# issues.
+TokenValues = []
+
 class Token(object):
   """ The tokens that can appear in a template.
   """
@@ -501,12 +505,21 @@ class Token(object):
       self.name = name
       self.text = text
       self.clazz = clazz
+      TokenValues.append(self)
+
+    def elseNodeClass(self):
+      if self.clazz == VertedSectionNode:
+        return InvertedSectionNode
+      if self.clazz == InvertedSectionNode:
+        return VertedSectionNode
+      raise ValueError(self.clazz + " can not have an else clause.")
 
   OPEN_START_SECTION          = Data("OPEN_START_SECTION"         , "{{#", SectionNode)
   OPEN_START_VERTED_SECTION   = Data("OPEN_START_VERTED_SECTION"  , "{{?", VertedSectionNode)
   OPEN_START_INVERTED_SECTION = Data("OPEN_START_INVERTED_SECTION", "{{^", InvertedSectionNode)
   OPEN_START_JSON             = Data("OPEN_START_JSON"            , "{{*", JsonNode)
   OPEN_START_PARTIAL          = Data("OPEN_START_PARTIAL"         , "{{+", PartialNode)
+  OPEN_ELSE                   = Data("OPEN_ELSE"                  , "{{:", None)
   OPEN_END_SECTION            = Data("OPEN_END_SECTION"           , "{{/", None)
   OPEN_UNESCAPED_VARIABLE     = Data("OPEN_UNESCAPED_VARIABLE"    , "{{{", UnescapedVariableNode)
   CLOSE_MUSTACHE3             = Data("CLOSE_MUSTACHE3"            , "}}}", None)
@@ -515,24 +528,6 @@ class Token(object):
   OPEN_VARIABLE               = Data("OPEN_VARIABLE"              , "{{" , EscapedVariableNode)
   CLOSE_MUSTACHE              = Data("CLOSE_MUSTACHE"             , "}}" , None)
   CHARACTER                   = Data("CHARACTER"                  , "."  , None)
-
-# List of tokens in order of longest to shortest, to avoid any prefix matching
-# issues.
-_tokenList = [
-  Token.OPEN_START_SECTION,
-  Token.OPEN_START_VERTED_SECTION,
-  Token.OPEN_START_INVERTED_SECTION,
-  Token.OPEN_START_JSON,
-  Token.OPEN_START_PARTIAL,
-  Token.OPEN_END_SECTION,
-  Token.OPEN_UNESCAPED_VARIABLE,
-  Token.CLOSE_MUSTACHE3,
-  Token.OPEN_COMMENT,
-  Token.CLOSE_COMMENT,
-  Token.OPEN_VARIABLE,
-  Token.CLOSE_MUSTACHE,
-  Token.CHARACTER
-]
 
 class TokenStream(object):
   """ Tokeniser for template parsing.
@@ -558,7 +553,7 @@ class TokenStream(object):
     if self._remainder == '':
       return None
 
-    for token in _tokenList:
+    for token in TokenValues:
       if self._remainder.startswith(token.text):
         self.nextToken = token
         break
@@ -605,17 +600,16 @@ class Handlebar(object):
 
     while tokens.hasNext() and not sectionEnded:
       token = tokens.nextToken
-      node = None
 
       if token == Token.CHARACTER:
         startLine = tokens.nextLine
         string = tokens.advanceOverNextString()
-        node = StringNode(string, startLine, tokens.nextLine)
+        nodes.append(StringNode(string, startLine, tokens.nextLine))
       elif token == Token.OPEN_VARIABLE or \
            token == Token.OPEN_UNESCAPED_VARIABLE or \
            token == Token.OPEN_START_JSON:
         id = self._openSectionOrTag(tokens)
-        node = token.clazz(id, tokens.nextLine)
+        nodes.append(token.clazz(id, tokens.nextLine))
       elif token == Token.OPEN_START_PARTIAL:
         tokens.advance()
         id = Identifier(tokens.advanceOverNextString(excluded=' '),
@@ -632,18 +626,30 @@ class Handlebar(object):
                          tokens.nextLine))
 
         tokens.advanceOver(Token.CLOSE_MUSTACHE)
-        node = partialNode
-      elif token == Token.OPEN_START_SECTION or \
-           token == Token.OPEN_START_VERTED_SECTION or \
-           token == Token.OPEN_START_INVERTED_SECTION:
+        nodes.append(partialNode)
+      elif token == Token.OPEN_START_SECTION:
         id = self._openSectionOrTag(tokens)
         section = self._parseSection(tokens)
         self._closeSection(tokens, id)
         if section:
-          node = token.clazz(id, section)
+          nodes.append(SectionNode(id, section))
+      elif token == Token.OPEN_START_VERTED_SECTION or \
+           token == Token.OPEN_START_INVERTED_SECTION:
+        id = self._openSectionOrTag(tokens)
+        section = self._parseSection(tokens)
+        elseSection = None
+        if tokens.nextToken == Token.OPEN_ELSE:
+          self._openElse(tokens, id)
+          elseSection = self._parseSection(tokens)
+        self._closeSection(tokens, id)
+        if section:
+          nodes.append(token.clazz(id, section))
+        if elseSection:
+          nodes.append(token.elseNodeClass()(id, elseSection))
       elif token == Token.OPEN_COMMENT:
         self._advanceOverComment(tokens)
-      elif token == Token.OPEN_END_SECTION:
+      elif token == Token.OPEN_END_SECTION or \
+           token == Token.OPEN_ELSE:
         # Handled after running parseSection within the SECTION cases, so this is a
         # terminating condition. If there *is* an orphaned OPEN_END_SECTION, it will be caught
         # by noticing that there are leftover tokens after termination.
@@ -651,9 +657,6 @@ class Handlebar(object):
       elif Token.CLOSE_MUSTACHE:
         raise ParseException("Orphaned " + tokens.nextToken.name,
                              tokens.nextLine)
-
-      if node:
-        nodes.append(node)
 
     for i, node in enumerate(nodes):
       if isinstance(node, StringNode):
@@ -714,7 +717,15 @@ class Handlebar(object):
     nextString = tokens.advanceOverNextString()
     if nextString != '' and nextString != str(id):
       raise ParseException(
-          "Start section " + str(id) + " doesn't match end section " + nextString)
+          "Start section " + str(id) + " doesn't match end " + nextString)
+    tokens.advanceOver(Token.CLOSE_MUSTACHE)
+
+  def _openElse(self, tokens, id):
+    tokens.advanceOver(Token.OPEN_ELSE)
+    nextString = tokens.advanceOverNextString()
+    if nextString != '' and nextString != str(id):
+      raise ParseException(
+          "Start section " + str(id) + " doesn't match else " + nextString)
     tokens.advanceOver(Token.CLOSE_MUSTACHE)
 
   def render(self, *contexts):
