@@ -141,7 +141,7 @@ public class Handlebar {
       if (startsWithThis)
           path = path.substring(thisDot.length());
 
-      if (!path.matches("^[a-zA-Z0-9._]+$"))
+      if (!path.matches("^[a-zA-Z0-9._\\-/]+$"))
         throw new ParseException("'" + path + "' is not a valid identifier", line);
       this.path = path;
     }

@@ -169,7 +169,7 @@
       thisDot = '@.';
       this._startsWithThis = startsWith(name, thisDot);
       if (this._startsWithThis) name = name.slice(thisDot.length);
-      if (!/^[a-zA-Z0-9._]*$/.test(name)) {
+      if (!/^[a-zA-Z0-9._\-\/]*$/.test(name)) {
         throw new ParseException(name + " is not a valid identifier", line);
       }
       this._path = name.split(".");

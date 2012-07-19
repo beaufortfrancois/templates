@@ -122,7 +122,7 @@ class Identifier
     if @_startsWithThis
       name = name.slice(thisDot.length)
 
-    if not /^[a-zA-Z0-9._]*$/.test(name)
+    if not /^[a-zA-Z0-9._\-\/]*$/.test(name)
       throw new ParseException(name + " is not a valid identifier", line)
     @_path = name.split(".")
 

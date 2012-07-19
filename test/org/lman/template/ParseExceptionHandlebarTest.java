@@ -23,10 +23,11 @@ public class ParseExceptionHandlebarTest {
   @Test
   public void invalidName() {
     expectParseException("hello {{bad name}}");
+    expectParseException("hello {{bad\nname}}");
     expectParseException("hello {{bad#name}}");
-    expectParseException("hello {{bad-name}}");
     expectParseException("hello {{ badname}}");
     expectParseException("hello {{badname }}");
+    expectParseException("hello {{\nbadname}}");
     expectParseException("hello {{badname\n}}");
   }
 

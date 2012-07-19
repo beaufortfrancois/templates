@@ -232,4 +232,9 @@ public abstract class AbstractHandlebarTest {
     test("nonexistence");
   }
 
+  @Test
+  public void validIds() {
+    test("validIds");
+  }
+
 }
