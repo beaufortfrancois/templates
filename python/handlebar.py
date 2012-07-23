@@ -68,7 +68,7 @@ class StringBuilder(object):
     return self._length
 
   def append(self, obj):
-    string = str(obj)
+    string = unicode(obj)
     self._buf.append(string)
     self._length += len(string)
 
@@ -349,7 +349,7 @@ class EscapedVariableNode(LeafNode):
   def render(self, renderState):
     value = self._id.resolve(renderState)
     if value != None:
-      self._appendEscapedHtml(renderState.text, str(value))
+      self._appendEscapedHtml(renderState.text, unicode(value))
 
   def _appendEscapedHtml(self, escaped, unescaped):
     for c in unescaped:
