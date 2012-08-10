@@ -45,8 +45,12 @@ public class JavaHandlebarTest extends AbstractHandlebarTest {
           getTemplateName(partialTemplateFile),
           new Handlebar(getContents(partialTemplateFile)));
     }
-    return new Handlebar(getContents(templateFile)).render(
-        getJson(jsonFile), new Templates(partialTemplates)).text;
+    Handlebar handlebar = new Handlebar(getContents(templateFile));
+    Handlebar.RenderResult result =
+        handlebar.render(getJson(jsonFile), new Templates(partialTemplates));
+    if (!result.errors.isEmpty())
+      System.err.println(result.errors);
+    return result.text;
   }
 
   private static String getTemplateName(File templateFile) {

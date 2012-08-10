@@ -588,6 +588,14 @@ class TokenStream(object):
       self.advance()
     return buf.toString()
 
+  def advanceToNextWhitespace(self):
+    return self.advanceOverNextString(excluded=' \n\r\t')
+
+  def skipWhitespace(self):
+    while len(self.nextContents) > 0 and \
+          ' \n\r\t'.find(self.nextContents) >= 0:
+      self.advance()
+
 class Handlebar(object):
   """ A handlebar template.
   """
@@ -620,17 +628,17 @@ class Handlebar(object):
         nodes.append(token.clazz(id, tokens.nextLine))
       elif token == Token.OPEN_START_PARTIAL:
         tokens.advance()
-        id = Identifier(tokens.advanceOverNextString(excluded=' '),
+        id = Identifier(tokens.advanceToNextWhitespace(),
                         tokens.nextLine)
         partialNode = PartialNode(id, tokens.nextLine)
 
         while tokens.nextToken == Token.CHARACTER:
-          tokens.advance()
+          tokens.skipWhitespace()
           key = tokens.advanceOverNextString(excluded=':')
           tokens.advance()
           partialNode.addArgument(
               key,
-              Identifier(tokens.advanceOverNextString(excluded=' '),
+              Identifier(tokens.advanceToNextWhitespace(),
                          tokens.nextLine))
 
         tokens.advanceOver(Token.CLOSE_MUSTACHE)

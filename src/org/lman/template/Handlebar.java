@@ -906,6 +906,15 @@ public class Handlebar {
     public String advanceOverNextString() {
       return advanceOverNextString("");
     }
+
+    public String advanceToNextWhitespace() {
+      return advanceOverNextString(" \n\r\t");
+    }
+
+    public void skipWhitespace() {
+      while (!nextContents.isEmpty() && " \n\r\t".indexOf(nextContents.charAt(0)) >= 0)
+        advance();
+    }
   }
 
   /** Source of the template. Public to be included when serialized to JSON. */
@@ -961,17 +970,17 @@ public class Handlebar {
         case OPEN_START_PARTIAL: {
           // Hand-write partial code because it's special.
           tokens.advance();
-          Identifier id = new Identifier(tokens.advanceOverNextString(" "), tokens.nextLine);
+          Identifier id = new Identifier(tokens.advanceToNextWhitespace(), tokens.nextLine);
           PartialNode partialNode = new PartialNode(id, tokens.nextLine);
 
           // Parse the arguments to the partial.
           while (tokens.nextToken == TokenStream.Token.CHARACTER) {
-            tokens.advance();
+            tokens.skipWhitespace();
             String key = tokens.advanceOverNextString(":");
             tokens.advance();  // past ':'
             partialNode.addArgument(
                 key,
-                new Identifier(tokens.advanceOverNextString(" "), tokens.nextLine));
+                new Identifier(tokens.advanceToNextWhitespace(), tokens.nextLine));
           }
 
           tokens.advanceOver(TokenStream.Token.CLOSE_MUSTACHE);

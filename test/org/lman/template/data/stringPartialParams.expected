@@ -1,0 +1,9 @@
+This is the first partial.
+Name: Ben Kalman.
+This is a template parameter that we'll pass the string to:
+  This is the second partial.
+  First name: Kalman
+  Second name: Ben
+This is the second partial.
+First name: Ben
+Second name: Kalman

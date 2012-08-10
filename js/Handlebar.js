@@ -874,6 +874,19 @@
       return buf.toString();
     };
 
+    TokenStream.prototype.advanceToNextWhitespace = function() {
+      return this.advanceOverNextString(" \n\r\t");
+    };
+
+    TokenStream.prototype.skipWhitespace = function() {
+      var _results;
+      _results = [];
+      while (this.hasNext() && " \n\r\t".indexOf(this.nextContents) >= 0) {
+        _results.push(this.advance());
+      }
+      return _results;
+    };
+
     return TokenStream;
 
   })();

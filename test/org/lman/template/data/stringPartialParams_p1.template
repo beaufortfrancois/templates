@@ -1,0 +1,5 @@
+This is the first partial.
+Name: {{firstName}} {{secondName}}.
+This is a template parameter that we'll pass the string to:
+  {{+partial firstName:secondName
+            secondName:firstName}}

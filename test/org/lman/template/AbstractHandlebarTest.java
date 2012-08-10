@@ -237,4 +237,9 @@ public abstract class AbstractHandlebarTest {
     test("validIds");
   }
 
+  @Test
+  public void stringPartialParams() {
+    test("stringPartialParams", "stringPartialParams_p1", "stringPartialParams_p2");
+  }
+
 }

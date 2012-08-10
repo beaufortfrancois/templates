@@ -1,0 +1,2 @@
+{{+partials.stringPartialParams_p1 partial:partials.stringPartialParams_p2}}
+{{+partials.stringPartialParams_p2}}

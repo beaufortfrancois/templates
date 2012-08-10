@@ -590,6 +590,13 @@ class TokenStream
       @advance()
     return buf.toString()
 
+  advanceToNextWhitespace: () ->
+    return @advanceOverNextString(" \n\r\t")
+
+  skipWhitespace: () ->
+    while @hasNext() and " \n\r\t".indexOf(@nextContents) >= 0
+      @advance()
+
 class Handlebar
   # Creates a new {@link Handlebar} parsed from a string.
   constructor: (template) ->
