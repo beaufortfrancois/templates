@@ -19,8 +19,10 @@ import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
 
@@ -75,6 +77,14 @@ public class JsonConverter {
       return readCollection(json, clazz, typeParameter);
     } else if (clazz.isEnum()) {
       return readEnum(json, clazz);
+    } else if (Map.class.isAssignableFrom(clazz)) {
+      if (typeParameter == null)
+        throw new ReadJsonException("Missing type parameter");
+      Map<String, Object> map = new HashMap<String, Object>();
+      JSONObject jsonObject = (JSONObject) json;
+      for (String key : jsonObject.keySet())
+        map.put(key, readJson(jsonObject.get(key), typeParameter.value(), null));
+      return map;
     } else {
       if (!(json instanceof JSONObject))
         throw new ReadJsonException(json + " not a JSONObject (is " + json.getClass() +

@@ -543,20 +543,12 @@ public class Handlebar {
     @Override
     public void render(RenderState renderState) {
       JsonView value = id.resolve(renderState);
-      if (value != null && !value.isNull())
-        appendEscapedHtml(renderState.text, value.toString());
-    }
+      if (value == null || value.isNull())
+        return;
 
-    private static void appendEscapedHtml(StringBuilder escaped, String unescaped) {
-      for (int i = 0; i < unescaped.length(); i++) {
-        char c = unescaped.charAt(i);
-        switch (c) {
-          case '<': escaped.append("&lt;"); break;
-          case '>': escaped.append("&gt;"); break;
-          case '&': escaped.append("&amp;"); break;
-          default: escaped.append(c);
-        }
-      }
+      renderState.text.append(value.toString().replaceAll("&", "&amp;")
+                                              .replaceAll("<", "&lt;")
+                                              .replaceAll(">", "&gt;"));
     }
 
     @Override
@@ -1039,6 +1031,8 @@ public class Handlebar {
           break;
 
         case CLOSE_MUSTACHE:
+        case CLOSE_MUSTACHE3:
+        case CLOSE_COMMENT:
           throw new ParseException("Orphaned " + tokens.nextToken, tokens.nextLine);
       }
     }
@@ -1092,6 +1086,8 @@ public class Handlebar {
           break;
         case CLOSE_COMMENT:
           depth--;
+          break;
+        default:
           break;
       }
       tokens.advance();

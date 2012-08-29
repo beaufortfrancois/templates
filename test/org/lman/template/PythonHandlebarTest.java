@@ -30,8 +30,8 @@ public class PythonHandlebarTest extends AbstractHandlebarTest {
     for (File partialTemplate : partialTemplates)
       args.add(partialTemplate.getAbsolutePath());
 
-    PythonProcess node = new PythonProcess(new File("python"), "handlebar_test.py");
-    PythonProcess.Output output = node.run(args.toArray(new String[]{}));
+    PythonProcess python = new PythonProcess(new File("python"), "handlebar_test.py");
+    PythonProcess.Output output = python.run(args.toArray(new String[]{}));
     System.out.println(output.stderr);
     return output.stdout;
   }

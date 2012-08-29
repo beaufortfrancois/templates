@@ -35,35 +35,41 @@ public abstract class Struct {
     }
   }
 
-  private boolean equals2(Object other) throws IllegalArgumentException, IllegalAccessException {
+  private boolean equals2(final Object other)
+      throws IllegalArgumentException, IllegalAccessException {
     if (this == other)
       return true;
     if (other == null)
       return false;
     if (getClass() != other.getClass())
       return false;
-    for (Field f : getClass().getFields()) {
-      if (Modifier.isStatic(f.getModifiers()))
-        continue;
-      if (f.getAnnotation(Transient.class) != null)
-        continue;
 
-      Object thisField = f.get(this);
-      Object otherField = f.get(other);
-      if (thisField == null) {
-        if (otherField != null)
-          return false;
-      } else {
-        if (f.getType().isArray()) {
-          if (!Arrays.deepEquals((Object[]) thisField, (Object[]) otherField))
-            return false;
-        } else {
-          if (!thisField.equals(otherField))
-            return false;
+    Boolean result = (Boolean) ReflectionHelper.forEach(this, new ReflectionHelper.FieldVisitor() {
+      @Override
+      public Control visit(Field field, Object value) {
+        Object otherValue = null;
+        try {
+          otherValue = field.get(other);
+        } catch (IllegalAccessException e) {
+          return breakAndReturn(false);
         }
+        if (value == null) {
+          if (otherValue != null)
+            return breakAndReturn(false);
+        } else {
+          if (field.getType().isArray()) {
+            if (!Arrays.deepEquals((Object[]) value, (Object[]) otherValue))
+              return breakAndReturn(false);
+          } else {
+            if (!value.equals(otherValue))
+              return breakAndReturn(false);
+          }
+        }
+        return Control.CONTINUE;
       }
-    }
-    return true;
+    });
+
+    return (result == null) ? true : result.booleanValue();
   }
 
   @Override

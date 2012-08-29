@@ -27,8 +27,8 @@ SOFTWARE.
 import java.io.IOException;
 import java.io.Writer;
 import java.lang.reflect.Field;
-import java.lang.reflect.Modifier;
 import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
 import java.util.Collection;
 import java.util.Enumeration;
 import java.util.HashMap;
@@ -36,6 +36,7 @@ import java.util.Iterator;
 import java.util.Locale;
 import java.util.Map;
 import java.util.ResourceBundle;
+import java.util.Set;
 
 /**
  * A JSONObject is an unordered collection of name/value pairs. Its
@@ -101,6 +102,7 @@ public class JSONObject {
          * so the clone method returns itself.
          * @return     NULL.
          */
+        @Override
         protected final Object clone() {
             return this;
         }
@@ -111,6 +113,7 @@ public class JSONObject {
          * @return true if the object parameter is the JSONObject.NULL object
          *  or null.
          */
+        @Override
         public boolean equals(Object object) {
             return object == null || object == this;
         }
@@ -119,6 +122,7 @@ public class JSONObject {
          * Get the "null" string value.
          * @return The string "null".
          */
+        @Override
         public String toString() {
             return "null";
         }
@@ -700,6 +704,9 @@ public class JSONObject {
         return this.map.keySet().iterator();
     }
 
+    public Set<String> keySet() {
+      return this.map.keySet();
+    }
 
     /**
      * Get the number of keys stored in the JSONObject.
@@ -1326,6 +1333,7 @@ public class JSONObject {
      *  with <code>{</code>&nbsp;<small>(left brace)</small> and ending
      *  with <code>}</code>&nbsp;<small>(right brace)</small>.
      */
+    @Override
     public String toString() {
         try {
             Iterator     keys = this.keys();
@@ -1627,14 +1635,14 @@ public class JSONObject {
             throw new JSONException(exception);
         }
      }
-     
+
      @Override
      public boolean equals(Object o) {
        if (o instanceof JSONObject)
          return map.equals(((JSONObject) o).map);
        return false;
      }
-     
+
      @Override
      public int hashCode() {
        return map.hashCode();

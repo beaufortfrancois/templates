@@ -24,7 +24,7 @@ public class PythonProcess extends AbstractExternalProcess {
 
   @Override
   protected String getRuntimePath() {
-    return "/opt/local/bin/python";
+    return "/usr/bin/python";
   }
 
   @Override
