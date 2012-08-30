@@ -1,18 +1,42 @@
 # Handlebar templates
 
-This repository contains utilities around a templating system that I called "Handlebar". They're a logic-less templating language based on [mustache](http://mustache.github.com/) (obviously) which is itself based on [ctemplate](http://code.google.com/p/ctemplate) apparently.
+Handlebar is a mostly-logicless data-binding templating language, initially inspired by [mustache](http://mustache.github.com/) and [ctemplate](http://code.google.com/p/ctemplate) but with stronger data-binding and logic primitives. It has nothing to do with [handlebars](http://http://handlebarsjs.com/), sorry about that.
 
-The original and reference implementation is written in Java, with a JavaScript (via CoffeeScript) port and a Python port. The tests are cross-platform but controlled from Java with junit; this means that all implementations are hopefully up to date (or else some tests are failing).
+The goal of Handlebar is to provide high quality templates across the whole stack of a web application. Write templates once, statically render content on the Java/Python/node server, then as content is added, dynamically render it using the same templates on the JavaScript client. This means:
+* Minimal logic (not logic-*less* but pretty dumb).
+* Powerful data-binding primitives.
 
-The goal of handlebar is to provide the most complete and convenient way to write logic-less templates across the whole stack of a web application. Write templates once, statically render content on the Java/Python server, then as content is dynamically added render it using the same templates on the JavaScript client.
+The original and reference implementation of Handlebar is written in Java, with a JavaScript (via CoffeeScript) and Python port. The tests are cross-platform but controlled from Java with JUnit; this means that all implementations are hopefully up to date (or else some tests are failing).
 
 ## Overview
 
-A template is text plus "mustache" control characters (thank you mustache for the cool terminology I have adopted).
+A template is text plus `{{`/`}}`-style markup, for example,
+
+    <h1>Party shopping list</h1>
+    <ul>
+    {{#guests}}
+      <li>{{name}} - {{favorites.food}}
+      {{?favourites.color}}
+      <li>{{name}} - {{favorites.color}}
+      {{/favourites.color}}
+    {{/guests}}
+    </ul>
+
+    ...
+
+    { "guests": [
+      { "name": "Ben",
+        "favorites": { "food": "Spaghetti",
+                       "color": "Blue" },
+      },
+      { "name": "Fred",
+         "favorites": { "food": "Penne" }
+      }
+    ] }
 
 A template is rendered by passing it JSON data. I say "JSON" but what I really mean is JSON-like data; the actual input will vary depending on the language bindings (Java uses reflection over properties and maps, JavaScript uses objects, Python uses dictionaries).
 
-Generally speaking there are two classes of mustaches: "self closing" ones like `{{foo}}` `{{{foo}}}` `{{*foo}}`, and "has children" ones like `{{#foo}}...{{/foo}}` `{{?foo}}...{{/foo}}` `{{^foo}}...{{/foo}}` where the `...` is arbitrary other template data.
+Generally speaking there are two classes of markup tags: "single" ones like `{{foo}}` `{{{foo}}}` `{{*foo}}`, and "block" ones like `{{#foo}}...{{/foo}}` `{{?foo}}...{{/foo}}` `{{^foo}}...{{/foo}}` where the `...` is arbitrary other template data.
 
 In both cases the `foo` represents a path into the JSON structure, so
 
@@ -36,9 +60,9 @@ will correctly resolve all references to be `42`.
 
 There is an additional identifier `@` representing the "tip" of that context stack, useful when iterating using the `{{#foo}}...{{/foo}}` structure; `{ "list": [1,2,3] }` with `{{#list}} {{@}} {{/list}}` will print ` 1  2  3 `.
 
-Finally, note that the `{{/foo}}` in `{{#foo}}...{{/foo}}` is actually redundant, and that `{{#foo}}...{{/}}` would be sufficient. Depdencing on the situation one or the other will tend to be more readable (explicitly using `{{/foo}}` will perform more validation).
+Finally, note that the `{{/foo}}` in `{{#foo}}...{{/foo}}` is actually redundant, and that `{{#foo}}...{{/}}` would be sufficient. Depdening on the situation one or the other will tend to be more readable (explicitly using `{{/foo}}` will perform more validation). A pattern I use is for multi-line blocks to have the name of the tag, single-line blocks to leave it out.
 
-## Structures ("mustaches")
+## Tags
 
 ### `{{foo.bar}}`
 
@@ -52,7 +76,7 @@ Prints out value at path `foo.bar` (no escaping).
 
 Prints out the JSON serialization of the object at path `foo.bar` (no escaping; this is designed for JavaScript client bootstrapping).
 
-### `{{+foo.bar}}`
+### `{{+foo.bar arg1:value1 arg2:value2}}`
 
 Inserts the sub-template (aka "partial template") found at path `foo.bar`. Currently, all libraries actually enforce that this is a pre-compiled template (rather than a plain string for example) for efficiency. This lets you do something like:
 
@@ -74,7 +98,7 @@ Very useful for dynamic web apps, and also just very useful.
 
 Runs `...` for each item in an array found at path `foo.bar`, or each key/value pair in an object.
 
-### `{{?foo.bar}}...{{/}}`
+### `{{?foo.bar}}...{{:}}...{{/}}`
 
 Runs `...` if `foo.bar` resolves to a "value", which is defined based on types.
 
@@ -85,16 +109,16 @@ Runs `...` if `foo.bar` resolves to a "value", which is defined based on types.
 * Any non-empty array is a value.
 * Any non-empty object is a value.
 
-### `{{^foo.bar}}...{{/}}`
+### `{{^foo.bar}}...{{:}}...{{/}}`
 
 Runs `...` if `foo.bar` _doesn't_ resolve to a "value". The exact opposite of `{{?foo.bar}}...{{/}}`.
 
-### `{{:foo.bar}}{{=case1}}...{{=case2}}___{{/}}`
+### {{- comment -}}
 
-Ooh a switch statement! Prints `...` if the string found at `foo.bar` is the string `"case1"`, `___` if it's `"case2"`, etc.
+## Layout
 
-## That's all
+Handlebar has some layout rules that should be kept in mind while writing templates.
 
-But at the moment this is currently under heavy weekend development. Which is to say a constant trickle of code as I need it.
-
-Soon: better fault tolerance all round, comments, tidier syntax, less whitespacey output, and moving the Java and JavaScript/CoffeeScript implementations and tests into this repository! And maybe some kind of online playground at some point.
+* Blocks
+* Inline
+* Indentation
