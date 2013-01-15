@@ -37,6 +37,8 @@ import org.lman.json.JsonView.ObjectVisitor;
 public class JsonConverter {
 
   private static class ReadJsonException extends Exception {
+    private static final long serialVersionUID = 1L;
+
     public ReadJsonException(String message) {
       super(message);
     }
@@ -186,6 +188,9 @@ public class JsonConverter {
         json.asArrayForeach(new ArrayVisitor() {
           @Override
           public void visit(JsonView value, int index) {
+            if (value.isNull())
+              return;
+
             try {
               writeJson(value, out);
             } catch (IllegalAccessException e) {
@@ -206,7 +211,7 @@ public class JsonConverter {
           json.asObjectForeach(new ObjectVisitor() {
             @Override
             public void visit(String key, JsonView value) {
-              if (value.isTransient())
+              if (value.isTransient() || value.isNull())
                 return;
 
               try {
