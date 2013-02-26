@@ -12,8 +12,23 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# TODO: Allow specifying ints, strings, bools (the latter if not overriden
+#       I suppose, the former requiring disallowing pure-int identifiers) as
+#       partial arguments.
+# TODO: Only have @ while in a loop, and only defined in the top context of
+#       the loop.
+# TODO: Only transfer global contexts into partials, not the top local.
+# TODO: Pragmas for asserting the presence of variables.
+# TODO: Don't print \n's in block comments.
+# TODO: Some kind of shorthand for e.g.
+#           <span class="{{?foo}}foo{{/}}">hello</span>
+#       e.g. {{?foo foo}} {{^foo foo}}
+# TODO: Escaping control characters somehow. e.g. \{{.
+# TODO: Dump warnings-so-far into the output.
+
 import json
 import re
+import sys
 
 '''Handlebar templates are data binding templates more-than-loosely inspired by
 ctemplate. Use like:
@@ -252,45 +267,46 @@ class _Line(object):
     return str(self.number)
 
 class _LeafNode(object):
-  def __init__(self, line):
-    self._line = line
+  def __init__(self, start_line, end_line):
+    self._start_line = start_line
+    self._end_line = end_line
 
-  def StartsWithNewline(self):
+  def StartsWithNewLine(self):
     return False
 
-  def TrimStartingNewline(self):
+  def TrimStartingNewLine(self):
     pass
 
   def TrimEndingSpaces(self):
     return 0
 
-  def TrimEndingNewline(self):
+  def TrimEndingNewLine(self):
     pass
 
   def EndsWithEmptyLine(self):
     return False
 
   def GetStartLine(self):
-    return self._line
+    return self._start_line
 
   def GetEndLine(self):
-    return self._line
+    return self._end_line
 
 class _DecoratorNode(object):
   def __init__(self, content):
     self._content = content
 
-  def StartsWithNewline(self):
-    return self._content.StartsWithNewline()
+  def StartsWithNewLine(self):
+    return self._content.StartsWithNewLine()
 
-  def TrimStartingNewline(self):
-    self._content.TrimStartingNewline()
+  def TrimStartingNewLine(self):
+    self._content.TrimStartingNewLine()
 
   def TrimEndingSpaces(self):
     return self._content.TrimEndingSpaces()
 
-  def TrimEndingNewline(self):
-    self._content.TrimEndingNewline()
+  def TrimEndingNewLine(self):
+    self._content.TrimEndingNewLine()
 
   def EndsWithEmptyLine(self):
     return self._content.EndsWithEmptyLine()
@@ -317,13 +333,14 @@ class _IndentedNode(_DecoratorNode):
     self._indent_str = ' ' * indentation
 
   def Render(self, render_state):
+    if isinstance(self._content, _CommentNode):
+      return
     content_render_state = render_state.Copy()
     self._content.Render(content_render_state)
     def AddIndentation(text):
       buf = _StringBuilder()
       buf.Append(self._indent_str)
       buf.Append(text.replace('\n', '\n%s' % self._indent_str))
-      # TODO: This might introduce an extra \n at the end? need test.
       buf.Append('\n')
       return buf.ToString()
     render_state.Merge(content_render_state, text_transform=AddIndentation)
@@ -331,7 +348,7 @@ class _IndentedNode(_DecoratorNode):
 class _BlockNode(_DecoratorNode):
   def __init__(self, content):
     _DecoratorNode.__init__(self, content)
-    content.TrimStartingNewline()
+    content.TrimStartingNewLine()
     content.TrimEndingSpaces()
 
   def Render(self, render_state):
@@ -346,17 +363,17 @@ class _NodeCollection(object):
     for node in self._nodes:
       node.Render(render_state)
 
-  def StartsWithNewline(self):
-    return self._nodes[0].StartsWithNewline()
+  def StartsWithNewLine(self):
+    return self._nodes[0].StartsWithNewLine()
 
-  def TrimStartingNewline(self):
-    self._nodes[0].TrimStartingNewline()
+  def TrimStartingNewLine(self):
+    self._nodes[0].TrimStartingNewLine()
 
   def TrimEndingSpaces(self):
     return self._nodes[-1].TrimEndingSpaces()
 
-  def TrimEndingNewline(self):
-    self._nodes[-1].TrimEndingNewline()
+  def TrimEndingNewLine(self):
+    self._nodes[-1].TrimEndingNewLine()
 
   def EndsWithEmptyLine(self):
     return self._nodes[-1].EndsWithEmptyLine()
@@ -370,19 +387,19 @@ class _NodeCollection(object):
 class _StringNode(object):
   ''' Just a string.
   '''
-  def __init__(self, string, startLine, endLine):
+  def __init__(self, string, start_line, end_line):
     self._string = string
-    self._startLine = startLine
-    self._endLine = endLine
+    self._start_line = start_line
+    self._end_line = end_line
 
   def Render(self, render_state):
     render_state.text.Append(self._string)
 
-  def StartsWithNewline(self):
+  def StartsWithNewLine(self):
     return self._string.startswith('\n')
 
-  def TrimStartingNewline(self):
-    if self.StartsWithNewline():
+  def TrimStartingNewLine(self):
+    if self.StartsWithNewLine():
       self._string = self._string[1:]
 
   def TrimEndingSpaces(self):
@@ -390,7 +407,7 @@ class _StringNode(object):
     self._string = self._string[:self._LastIndexOfSpaces()]
     return original_length - len(self._string)
 
-  def TrimEndingNewline(self):
+  def TrimEndingNewLine(self):
     if self._string.endswith('\n'):
       self._string = self._string[:len(self._string) - 1]
 
@@ -405,16 +422,16 @@ class _StringNode(object):
     return index
 
   def GetStartLine(self):
-    return self._startLine
+    return self._start_line
 
   def GetEndLine(self):
-    return self._endLine
+    return self._end_line
 
-class EscapedVariableNode(_LeafNode):
+class _EscapedVariableNode(_LeafNode):
   ''' {{foo}}
   '''
   def __init__(self, id_, line):
-    _LeafNode.__init__(self, line)
+    _LeafNode.__init__(self, line, line)
     self._id = id_
 
   def Render(self, render_state):
@@ -427,11 +444,11 @@ class EscapedVariableNode(_LeafNode):
                                    .replace('<', '&lt;')
                                    .replace('>', '&gt;'))
 
-class UnescapedVariableNode(_LeafNode):
+class _UnescapedVariableNode(_LeafNode):
   ''' {{{foo}}}
   '''
   def __init__(self, id_, line):
-    _LeafNode.__init__(self, line)
+    _LeafNode.__init__(self, line, line)
     self._id = id_
 
   def Render(self, render_state):
@@ -442,7 +459,17 @@ class UnescapedVariableNode(_LeafNode):
     string = value if isinstance(value, basestring) else str(value)
     render_state.text.Append(string)
 
-class SectionNode(_DecoratorNode):
+class _CommentNode(_LeafNode):
+  '''{{- This is a comment -}}
+  An empty placeholder node for correct indented rendering behaviour.
+  '''
+  def __init__(self, start_line, end_line):
+    _LeafNode.__init__(self, start_line, end_line)
+
+  def Render(self, render_state):
+    pass
+
+class _SectionNode(_DecoratorNode):
   ''' {{#foo}} ... {{/}}
   '''
   def __init__(self, id_, content):
@@ -465,7 +492,7 @@ class SectionNode(_DecoratorNode):
     else:
       render_state.AddResolutionError(self._id)
 
-class VertedSectionNode(_DecoratorNode):
+class _VertedSectionNode(_DecoratorNode):
   ''' {{?foo}} ... {{/}}
   '''
   def __init__(self, id_, content):
@@ -474,7 +501,7 @@ class VertedSectionNode(_DecoratorNode):
 
   def Render(self, render_state):
     value = render_state.contexts.Resolve(self._id.name)
-    if VertedSectionNode.ShouldRender(value):
+    if _VertedSectionNode.ShouldRender(value):
       render_state.contexts.Push(value)
       self._content.Render(render_state)
       render_state.contexts.Pop()
@@ -489,7 +516,7 @@ class VertedSectionNode(_DecoratorNode):
       return len(value) > 0
     return True
 
-class InvertedSectionNode(_DecoratorNode):
+class _InvertedSectionNode(_DecoratorNode):
   ''' {{^foo}} ... {{/}}
   '''
   def __init__(self, id_, content):
@@ -498,14 +525,14 @@ class InvertedSectionNode(_DecoratorNode):
 
   def Render(self, render_state):
     value = render_state.contexts.Resolve(self._id.name)
-    if not VertedSectionNode.ShouldRender(value):
+    if not _VertedSectionNode.ShouldRender(value):
       self._content.Render(render_state)
 
-class JsonNode(_LeafNode):
+class _JsonNode(_LeafNode):
   ''' {{*foo}}
   '''
   def __init__(self, id_, line):
-    _LeafNode.__init__(self, line)
+    _LeafNode.__init__(self, line, line)
     self._id = id_
 
   def Render(self, render_state):
@@ -515,11 +542,11 @@ class JsonNode(_LeafNode):
       return
     render_state.text.Append(json.dumps(value, separators=(',',':')))
 
-class PartialNode(_LeafNode):
+class _PartialNode(_LeafNode):
   ''' {{+foo}}
   '''
   def __init__(self, id_, line):
-    _LeafNode.__init__(self, line)
+    _LeafNode.__init__(self, line, line)
     self._id = id_
     self._args = None
     self._local_context_id = None
@@ -571,7 +598,7 @@ class PartialNode(_LeafNode):
 # issues.
 TokenValues = []
 
-class Token(object):
+class _Token(object):
   ''' The tokens that can appear in a template.
   '''
   class Data(object):
@@ -582,28 +609,28 @@ class Token(object):
       TokenValues.append(self)
 
     def ElseNodeClass(self):
-      if self.clazz == VertedSectionNode:
-        return InvertedSectionNode
-      if self.clazz == InvertedSectionNode:
-        return VertedSectionNode
+      if self.clazz == _VertedSectionNode:
+        return _InvertedSectionNode
+      if self.clazz == _InvertedSectionNode:
+        return _VertedSectionNode
       raise ValueError('%s cannot have an else clause.' % self.clazz)
 
-  OPEN_START_SECTION          = Data('OPEN_START_SECTION'         , '{{#', SectionNode)
-  OPEN_START_VERTED_SECTION   = Data('OPEN_START_VERTED_SECTION'  , '{{?', VertedSectionNode)
-  OPEN_START_INVERTED_SECTION = Data('OPEN_START_INVERTED_SECTION', '{{^', InvertedSectionNode)
-  OPEN_START_JSON             = Data('OPEN_START_JSON'            , '{{*', JsonNode)
-  OPEN_START_PARTIAL          = Data('OPEN_START_PARTIAL'         , '{{+', PartialNode)
+  OPEN_START_SECTION          = Data('OPEN_START_SECTION'         , '{{#', _SectionNode)
+  OPEN_START_VERTED_SECTION   = Data('OPEN_START_VERTED_SECTION'  , '{{?', _VertedSectionNode)
+  OPEN_START_INVERTED_SECTION = Data('OPEN_START_INVERTED_SECTION', '{{^', _InvertedSectionNode)
+  OPEN_START_JSON             = Data('OPEN_START_JSON'            , '{{*', _JsonNode)
+  OPEN_START_PARTIAL          = Data('OPEN_START_PARTIAL'         , '{{+', _PartialNode)
   OPEN_ELSE                   = Data('OPEN_ELSE'                  , '{{:', None)
   OPEN_END_SECTION            = Data('OPEN_END_SECTION'           , '{{/', None)
-  OPEN_UNESCAPED_VARIABLE     = Data('OPEN_UNESCAPED_VARIABLE'    , '{{{', UnescapedVariableNode)
+  OPEN_UNESCAPED_VARIABLE     = Data('OPEN_UNESCAPED_VARIABLE'    , '{{{', _UnescapedVariableNode)
   CLOSE_MUSTACHE3             = Data('CLOSE_MUSTACHE3'            , '}}}', None)
-  OPEN_COMMENT                = Data('OPEN_COMMENT'               , '{{-', None)
+  OPEN_COMMENT                = Data('OPEN_COMMENT'               , '{{-', _CommentNode)
   CLOSE_COMMENT               = Data('CLOSE_COMMENT'              , '-}}', None)
-  OPEN_VARIABLE               = Data('OPEN_VARIABLE'              , '{{' , EscapedVariableNode)
+  OPEN_VARIABLE               = Data('OPEN_VARIABLE'              , '{{' , _EscapedVariableNode)
   CLOSE_MUSTACHE              = Data('CLOSE_MUSTACHE'             , '}}' , None)
   CHARACTER                   = Data('CHARACTER'                  , '.'  , None)
 
-class TokenStream(object):
+class _TokenStream(object):
   ''' Tokeniser for template parsing.
   '''
   def __init__(self, string):
@@ -636,7 +663,7 @@ class TokenStream(object):
         break
 
     if not self.next_token:
-      self.next_token = Token.CHARACTER
+      self.next_token = _Token.CHARACTER
 
     self.next_contents = self._remainder[0:len(self.next_token.text)]
     self._remainder = self._remainder[len(self.next_token.text):]
@@ -651,7 +678,7 @@ class TokenStream(object):
 
   def AdvanceOverNextString(self, excluded=''):
     buf = _StringBuilder()
-    while self.next_token == Token.CHARACTER and \
+    while self.next_token == _Token.CHARACTER and \
           excluded.find(self.next_contents) == -1:
       buf.Append(self.next_contents)
       self.Advance()
@@ -671,7 +698,7 @@ class Handlebar(object):
   def __init__(self, template, name=None):
     self.source = template
     self._name = name
-    tokens = TokenStream(template)
+    tokens = _TokenStream(template)
     self._top_node = self._ParseSection(tokens)
     if not self._top_node:
       raise ParseException('Template is empty', tokens.next_line)
@@ -687,24 +714,23 @@ class Handlebar(object):
     while tokens.HasNext() and not section_ended:
       token = tokens.next_token
 
-      if token == Token.CHARACTER:
-        startLine = tokens.next_line
+      if token == _Token.CHARACTER:
+        start_line = tokens.next_line
         string = tokens.AdvanceOverNextString()
-        nodes.append(_StringNode(string, startLine, tokens.next_line))
-      elif token == Token.OPEN_VARIABLE or \
-           token == Token.OPEN_UNESCAPED_VARIABLE or \
-           token == Token.OPEN_START_JSON:
+        nodes.append(_StringNode(string, start_line, tokens.next_line))
+      elif token == _Token.OPEN_VARIABLE or \
+           token == _Token.OPEN_UNESCAPED_VARIABLE or \
+           token == _Token.OPEN_START_JSON:
         id_ = self._OpenSectionOrTag(tokens)
         nodes.append(token.clazz(id_, tokens.next_line))
-      elif token == Token.OPEN_START_PARTIAL:
+      elif token == _Token.OPEN_START_PARTIAL:
         tokens.Advance()
         column_start = tokens.next_column + 1
         id_ = _Identifier(tokens.AdvanceToNextWhitespace(),
                           tokens.next_line,
                           column_start)
-        partial_node = PartialNode(id_, tokens.next_line)
-
-        while tokens.next_token == Token.CHARACTER:
+        partial_node = _PartialNode(id_, tokens.next_line)
+        while tokens.next_token == _Token.CHARACTER:
           tokens.SkipWhitespace()
           key = tokens.AdvanceOverNextString(excluded=':')
           tokens.Advance()
@@ -716,21 +742,20 @@ class Handlebar(object):
             partial_node.SetLocalContext(id_)
           else:
             partial_node.AddArgument(key, id_)
-
-        tokens.AdvanceOver(Token.CLOSE_MUSTACHE)
+        tokens.AdvanceOver(_Token.CLOSE_MUSTACHE)
         nodes.append(partial_node)
-      elif token == Token.OPEN_START_SECTION:
+      elif token == _Token.OPEN_START_SECTION:
         id_ = self._OpenSectionOrTag(tokens)
         section = self._ParseSection(tokens)
         self._CloseSection(tokens, id_)
         if section:
-          nodes.append(SectionNode(id_, section))
-      elif token == Token.OPEN_START_VERTED_SECTION or \
-           token == Token.OPEN_START_INVERTED_SECTION:
+          nodes.append(_SectionNode(id_, section))
+      elif token == _Token.OPEN_START_VERTED_SECTION or \
+           token == _Token.OPEN_START_INVERTED_SECTION:
         id_ = self._OpenSectionOrTag(tokens)
         section = self._ParseSection(tokens)
         else_section = None
-        if tokens.next_token == Token.OPEN_ELSE:
+        if tokens.next_token == _Token.OPEN_ELSE:
           self._OpenElse(tokens, id_)
           else_section = self._ParseSection(tokens)
         self._CloseSection(tokens, id_)
@@ -738,17 +763,19 @@ class Handlebar(object):
           nodes.append(token.clazz(id_, section))
         if else_section:
           nodes.append(token.ElseNodeClass()(id_, else_section))
-      elif token == Token.OPEN_COMMENT:
+      elif token == _Token.OPEN_COMMENT:
+        start_line = tokens.next_line
         self._AdvanceOverComment(tokens)
-      elif token == Token.OPEN_END_SECTION or \
-           token == Token.OPEN_ELSE:
+        nodes.append(_CommentNode(start_line, tokens.next_line))
+      elif token == _Token.OPEN_END_SECTION or \
+           token == _Token.OPEN_ELSE:
         # Handled after running parseSection within the SECTION cases, so this
         # is a terminating condition. If there *is* an orphaned
         # OPEN_END_SECTION, it will be caught by noticing that there are
         # leftover tokens after termination.
         section_ended = True
-      elif Token.CLOSE_MUSTACHE:
-        raise ParseException('Orphaned ' + tokens.next_token.name,
+      elif _Token.CLOSE_MUSTACHE:
+        raise ParseException('Orphaned %s' % tokens.next_token.name,
                              tokens.next_line)
 
     for i, node in enumerate(nodes):
@@ -764,15 +791,15 @@ class Handlebar(object):
         if previous_node:
           previous_node.TrimEndingSpaces()
         if next_node:
-          next_node.TrimStartingNewline()
-      elif isinstance(node, _LeafNode) and \
-           (not previous_node or previous_node.EndsWithEmptyLine()) and \
-           (not next_node or next_node.StartsWithNewline()):
+          next_node.TrimStartingNewLine()
+      elif (isinstance(node, _LeafNode) and
+            (not previous_node or previous_node.EndsWithEmptyLine()) and
+            (not next_node or next_node.StartsWithNewLine())):
         indentation = 0
         if previous_node:
           indentation = previous_node.TrimEndingSpaces()
         if next_node:
-          next_node.TrimStartingNewline()
+          next_node.TrimStartingNewLine()
         rendered_node = _IndentedNode(node, indentation)
       else:
         rendered_node = _InlineNode(node)
@@ -786,14 +813,18 @@ class Handlebar(object):
     return _NodeCollection(nodes)
 
   def _AdvanceOverComment(self, tokens):
-    tokens.AdvanceOver(Token.OPEN_COMMENT)
+    tokens.AdvanceOver(_Token.OPEN_COMMENT)
+    comment = _StringBuilder()
     depth = 1
     while tokens.HasNext() and depth > 0:
-      if tokens.next_token == Token.OPEN_COMMENT:
+      if tokens.next_token == _Token.OPEN_COMMENT:
         depth += 1
-      elif tokens.next_token == Token.CLOSE_COMMENT:
+      elif tokens.next_token == _Token.CLOSE_COMMENT:
         depth -= 1
+      if depth > 0:
+        comment.Append(tokens.next_contents)
       tokens.Advance()
+    return comment.ToString()
 
   def _OpenSectionOrTag(self, tokens):
     open_token = tokens.next_token
@@ -802,27 +833,27 @@ class Handlebar(object):
     id_ = _Identifier(tokens.AdvanceOverNextString(),
                       tokens.next_line,
                       column_start)
-    if open_token == Token.OPEN_UNESCAPED_VARIABLE:
-      tokens.AdvanceOver(Token.CLOSE_MUSTACHE3)
+    if open_token == _Token.OPEN_UNESCAPED_VARIABLE:
+      tokens.AdvanceOver(_Token.CLOSE_MUSTACHE3)
     else:
-      tokens.AdvanceOver(Token.CLOSE_MUSTACHE)
+      tokens.AdvanceOver(_Token.CLOSE_MUSTACHE)
     return id_
 
   def _CloseSection(self, tokens, id_):
-    tokens.AdvanceOver(Token.OPEN_END_SECTION)
+    tokens.AdvanceOver(_Token.OPEN_END_SECTION)
     next_string = tokens.AdvanceOverNextString()
     if next_string != '' and next_string != id_.name:
       raise ParseException(
           'Start section %s doesn\'t match end %s' % (id_, next_string))
-    tokens.AdvanceOver(Token.CLOSE_MUSTACHE)
+    tokens.AdvanceOver(_Token.CLOSE_MUSTACHE)
 
   def _OpenElse(self, tokens, id_):
-    tokens.AdvanceOver(Token.OPEN_ELSE)
+    tokens.AdvanceOver(_Token.OPEN_ELSE)
     next_string = tokens.AdvanceOverNextString()
     if next_string != '' and next_string != id_.name:
       raise ParseException(
           'Start section %s doesn\'t match else %s' % (id_, next_string))
-    tokens.AdvanceOver(Token.CLOSE_MUSTACHE)
+    tokens.AdvanceOver(_Token.CLOSE_MUSTACHE)
 
   def Render(self, *contexts):
     '''Renders this template given a variable number of contexts to read out

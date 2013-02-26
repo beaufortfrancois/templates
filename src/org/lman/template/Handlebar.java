@@ -48,14 +48,14 @@ import org.lman.json.PojoJsonView;
  * Note that it's written in a bit of a crazy way (i.e. highly "object based" and reflective) to
  * make it easier to port to Javascript/Coffeescript.
  */
-// TODO: comments on all platforms.
-// TODO: experiment with ensureCapacity when calling Node#render.
 public class Handlebar {
 
   /**
    * Thrown if parsing {@link Handlebar#source} fails.
    */
   public static class ParseException extends RuntimeException {
+    private static final long serialVersionUID = 1L;
+
     public ParseException(String error, Line line) {
       // TODO: add template filename here too.
       super(error + " (line " + line.number + ")");

@@ -1,7 +1,13 @@
-
-foo  bar
-baz 
-quux 
+TODO make these render like "inline comment" not "inline  comment"
+inline  comment
+ leading comment
+trailing comment 
+block comment:
+indented block comment:
+crazy blocknot crazy anymore.
+a bunch of single lines:
+just an indented single line
+don't render the control characters
 seaslug
 unicorn
-
+end

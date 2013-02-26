@@ -1,14 +1,33 @@
-{{- Single-line comment -}}
-foo {{- comment -}} bar
-baz {{-
+{{- single line comment -}}
+TODO make these render like "inline comment" not "inline  comment"
+inline {{- hello -}} comment
+{{- hello -}} leading comment
+trailing comment {{- comment -}}
+block comment:
+{{- something here
+    something else -}}
+indented block comment:
+  {{- something here
+      something else -}}
+crazy block {{-
 I am a
 multi-line
 comment
 -}}
-quux {{- Here are
-some {{control.characters}}
-inside a comment -}}
+not crazy anymore.
+a bunch of single lines:
+{{- here -}}
+  {{- here -}}
+    {{- here -}}
+{{- here -}}
+just an indented single line
+  {{- here -}}
+don't render the control characters
+{{- Here are some {{control.characters}} inside an indented comment -}}
+{{- Here are some {{control.characters}} inside a 
+    block comment comment -}}
 {{control.characters}}
 unicorn
 {{- and a {{- nested {{- nested -}} comment -}} and {{control.characters}}
 and another {{- nested comment -}} and finally -}}
+end
