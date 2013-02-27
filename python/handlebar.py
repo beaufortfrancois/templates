@@ -12,23 +12,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# TODO: Allow specifying ints, strings, bools (the latter if not overriden
-#       I suppose, the former requiring disallowing pure-int identifiers) as
-#       partial arguments.
+# TODO: Some character other than {{{ }}} to print unescaped content.
 # TODO: Only have @ while in a loop, and only defined in the top context of
 #       the loop.
+# TODO: Consider trimming spaces around identifers like {{?t foo}}.
 # TODO: Only transfer global contexts into partials, not the top local.
 # TODO: Pragmas for asserting the presence of variables.
-# TODO: Don't print \n's in block comments.
-# TODO: Some kind of shorthand for e.g.
-#           <span class="{{?foo}}foo{{/}}">hello</span>
-#       e.g. {{?foo foo}} {{^foo foo}}
-# TODO: Escaping control characters somehow. e.g. \{{.
+# TODO: Escaping control characters somehow. e.g. \{{, \{{-.
 # TODO: Dump warnings-so-far into the output.
 
 import json
 import re
-import sys
 
 '''Handlebar templates are data binding templates more-than-loosely inspired by
 ctemplate. Use like:
@@ -60,8 +54,8 @@ will print 'hello 10'.
 class ParseException(Exception):
   '''The exception thrown while parsing a template.
   '''
-  def __init__(self, error, line):
-    Exception.__init__(self, '%s (line %s)' % (error, line.number))
+  def __init__(self, error):
+    Exception.__init__(self, error)
 
 class _RenderResult(object):
   '''The result of a render operation.
@@ -201,34 +195,43 @@ class _Contexts(object):
 
     return found_node_list[-1]._value[key]
 
+class _Stack(object):
+  class Entry(object):
+    def __init__(self, name, id_):
+      self.name = name
+      self.id_ = id_
+
+  def __init__(self, entries=[]):
+    self.entries = entries
+
+  def Descend(self, name, id_):
+    descended = list(self.entries)
+    descended.append(_Stack.Entry(name, id_))
+    return _Stack(entries=descended)
+
 class _RenderState(object):
   '''The state of a render call.
   '''
-  def __init__(self, name, contexts, _partial_info=None):
+  def __init__(self, name, contexts, _stack=_Stack()):
     self.text = _StringBuilder()
     self.contexts = contexts
     self._name = name
     self._errors = []
-    self._partial_info = _partial_info
+    self._stack = _stack
 
   def AddResolutionError(self, id_):
-    self._errors.append('Failed to resolve %s in %s' % (id_.GetDescription(),
-                                                        self._name))
-    partial_info = self._partial_info
-    while partial_info is not None:
-      render_state, id_ = partial_info
-      self._errors.append('  included as %s in %s' % (id_.GetDescription(),
-                                                      render_state._name))
-      partial_info = render_state._partial_info
+    self._errors.append(
+        id_.CreateResolutionErrorMessage(self._name, stack=self._stack))
 
   def Copy(self):
     return _RenderState(
-        self._name, self.contexts, _partial_info=self._partial_info)
+        self._name, self.contexts, _stack=self._stack)
 
   def ForkPartial(self, custom_name, id_):
     name = custom_name or id_.name
-    return _RenderState(
-        name, self.contexts.CreateFromGlobals(), _partial_info=(self, id_))
+    return _RenderState(name,
+                        self.contexts.CreateFromGlobals(),
+                        _stack=self._stack.Descend(name, id_))
 
   def Merge(self, render_state, text_transform=None):
     self._errors.extend(render_state._errors)
@@ -245,16 +248,26 @@ class _Identifier(object):
   '''
   def __init__(self, name, line, column):
     self.name = name
-    self._line = line
-    self._column = column
+    self.line = line
+    self.column = column
     if name == '':
       raise ParseException('Empty identifier %s' % self.GetDescription())
     for part in name.split('.'):
-      if part != '@' and not re.match('^[a-zA-Z0-9_\\-/]+$', part):
+      if part != '@' and not re.match('^[a-zA-Z0-9_-]+$', part):
         raise ParseException('Invalid identifier %s' % self.GetDescription())
 
   def GetDescription(self):
-    return '\'%s\' at line %s column %s' % (self.name, self._line, self._column)
+    return '\'%s\' at line %s column %s' % (self.name, self.line, self.column)
+
+  def CreateResolutionErrorMessage(self, name, stack=None):
+    message = _StringBuilder()
+    message.Append('Failed to resolve %s in %s\n' % (self.GetDescription(),
+                                                     name))
+    if stack is not None:
+      for entry in stack.entries:
+        message.Append('  included as %s in %s\n' % (entry.id_.GetDescription(),
+                                                     entry.name))
+    return message.ToString()
 
   def __str__(self):
     raise ValueError()
@@ -430,8 +443,8 @@ class _StringNode(object):
 class _EscapedVariableNode(_LeafNode):
   ''' {{foo}}
   '''
-  def __init__(self, id_, line):
-    _LeafNode.__init__(self, line, line)
+  def __init__(self, id_):
+    _LeafNode.__init__(self, id_.line, id_.line)
     self._id = id_
 
   def Render(self, render_state):
@@ -447,8 +460,8 @@ class _EscapedVariableNode(_LeafNode):
 class _UnescapedVariableNode(_LeafNode):
   ''' {{{foo}}}
   '''
-  def __init__(self, id_, line):
-    _LeafNode.__init__(self, line, line)
+  def __init__(self, id_):
+    _LeafNode.__init__(self, id_.line, id_.line)
     self._id = id_
 
   def Render(self, render_state):
@@ -531,8 +544,8 @@ class _InvertedSectionNode(_DecoratorNode):
 class _JsonNode(_LeafNode):
   ''' {{*foo}}
   '''
-  def __init__(self, id_, line):
-    _LeafNode.__init__(self, line, line)
+  def __init__(self, id_):
+    _LeafNode.__init__(self, id_.line, id_.line)
     self._id = id_
 
   def Render(self, render_state):
@@ -545,8 +558,8 @@ class _JsonNode(_LeafNode):
 class _PartialNode(_LeafNode):
   ''' {{+foo}}
   '''
-  def __init__(self, id_, line):
-    _LeafNode.__init__(self, line, line)
+  def __init__(self, id_):
+    _LeafNode.__init__(self, id_.line, id_.line)
     self._id = id_
     self._args = None
     self._local_context_id = None
@@ -622,6 +635,7 @@ class _Token(object):
   OPEN_START_PARTIAL          = Data('OPEN_START_PARTIAL'         , '{{+', _PartialNode)
   OPEN_ELSE                   = Data('OPEN_ELSE'                  , '{{:', None)
   OPEN_END_SECTION            = Data('OPEN_END_SECTION'           , '{{/', None)
+  INLINE_END_SECTION          = Data('INLINE_END_SECTION'         , '/}}', None)
   OPEN_UNESCAPED_VARIABLE     = Data('OPEN_UNESCAPED_VARIABLE'    , '{{{', _UnescapedVariableNode)
   CLOSE_MUSTACHE3             = Data('CLOSE_MUSTACHE3'            , '}}}', None)
   OPEN_COMMENT                = Data('OPEN_COMMENT'               , '{{-', _CommentNode)
@@ -672,13 +686,14 @@ class _TokenStream(object):
   def AdvanceOver(self, token):
     if self.next_token != token:
       raise ParseException(
-          'Expecting token ' + token.name + ' but got ' + self.next_token.name,
-          self.next_line)
+          'Expecting token %s but got %s at line %s' % (token.name,
+                                                        self.next_token.name,
+                                                        self.next_line))
     return self.Advance()
 
   def AdvanceOverNextString(self, excluded=''):
     buf = _StringBuilder()
-    while self.next_token == _Token.CHARACTER and \
+    while self.next_token is _Token.CHARACTER and \
           excluded.find(self.next_contents) == -1:
       buf.Append(self.next_contents)
       self.Advance()
@@ -701,82 +716,27 @@ class Handlebar(object):
     tokens = _TokenStream(template)
     self._top_node = self._ParseSection(tokens)
     if not self._top_node:
-      raise ParseException('Template is empty', tokens.next_line)
+      raise ParseException('Template is empty')
     if tokens.HasNext():
-      raise ParseException('There are still tokens remaining, '
-                           'was there an end-section without a start-section:',
-                           tokens.next_line)
+      raise ParseException('There are still tokens remaining at %s, '
+                           'was there an end-section without a start-section?'
+                           % tokens.next_line)
 
   def _ParseSection(self, tokens):
     nodes = []
-    section_ended = False
-
-    while tokens.HasNext() and not section_ended:
-      token = tokens.next_token
-
-      if token == _Token.CHARACTER:
-        start_line = tokens.next_line
-        string = tokens.AdvanceOverNextString()
-        nodes.append(_StringNode(string, start_line, tokens.next_line))
-      elif token == _Token.OPEN_VARIABLE or \
-           token == _Token.OPEN_UNESCAPED_VARIABLE or \
-           token == _Token.OPEN_START_JSON:
-        id_ = self._OpenSectionOrTag(tokens)
-        nodes.append(token.clazz(id_, tokens.next_line))
-      elif token == _Token.OPEN_START_PARTIAL:
-        tokens.Advance()
-        column_start = tokens.next_column + 1
-        id_ = _Identifier(tokens.AdvanceToNextWhitespace(),
-                          tokens.next_line,
-                          column_start)
-        partial_node = _PartialNode(id_, tokens.next_line)
-        while tokens.next_token == _Token.CHARACTER:
-          tokens.SkipWhitespace()
-          key = tokens.AdvanceOverNextString(excluded=':')
-          tokens.Advance()
-          column_start = tokens.next_column + 1
-          id_ = _Identifier(tokens.AdvanceToNextWhitespace(),
-                            tokens.next_line,
-                            column_start)
-          if key == '@':
-            partial_node.SetLocalContext(id_)
-          else:
-            partial_node.AddArgument(key, id_)
-        tokens.AdvanceOver(_Token.CLOSE_MUSTACHE)
-        nodes.append(partial_node)
-      elif token == _Token.OPEN_START_SECTION:
-        id_ = self._OpenSectionOrTag(tokens)
-        section = self._ParseSection(tokens)
-        self._CloseSection(tokens, id_)
-        if section:
-          nodes.append(_SectionNode(id_, section))
-      elif token == _Token.OPEN_START_VERTED_SECTION or \
-           token == _Token.OPEN_START_INVERTED_SECTION:
-        id_ = self._OpenSectionOrTag(tokens)
-        section = self._ParseSection(tokens)
-        else_section = None
-        if tokens.next_token == _Token.OPEN_ELSE:
-          self._OpenElse(tokens, id_)
-          else_section = self._ParseSection(tokens)
-        self._CloseSection(tokens, id_)
-        if section:
-          nodes.append(token.clazz(id_, section))
-        if else_section:
-          nodes.append(token.ElseNodeClass()(id_, else_section))
-      elif token == _Token.OPEN_COMMENT:
-        start_line = tokens.next_line
-        self._AdvanceOverComment(tokens)
-        nodes.append(_CommentNode(start_line, tokens.next_line))
-      elif token == _Token.OPEN_END_SECTION or \
-           token == _Token.OPEN_ELSE:
+    while tokens.HasNext():
+      if tokens.next_token in (_Token.OPEN_END_SECTION,
+                               _Token.OPEN_ELSE):
         # Handled after running parseSection within the SECTION cases, so this
         # is a terminating condition. If there *is* an orphaned
         # OPEN_END_SECTION, it will be caught by noticing that there are
         # leftover tokens after termination.
-        section_ended = True
-      elif _Token.CLOSE_MUSTACHE:
-        raise ParseException('Orphaned %s' % tokens.next_token.name,
-                             tokens.next_line)
+        break
+      elif tokens.next_token in (_Token.CLOSE_MUSTACHE,
+                                 _Token.CLOSE_MUSTACHE3):
+        raise ParseException('Orphaned %s at line %s' % (tokens.next_token.name,
+                                                         tokens.next_line))
+      nodes += self._ParseNextOpenToken(tokens)
 
     for i, node in enumerate(nodes):
       if isinstance(node, _StringNode):
@@ -812,14 +772,85 @@ class Handlebar(object):
       return nodes[0]
     return _NodeCollection(nodes)
 
+  def _ParseNextOpenToken(self, tokens):
+    next_token = tokens.next_token
+
+    if next_token is _Token.CHARACTER:
+      start_line = tokens.next_line
+      string = tokens.AdvanceOverNextString()
+      return [_StringNode(string, start_line, tokens.next_line)]
+    elif next_token in (_Token.OPEN_VARIABLE,
+                        _Token.OPEN_UNESCAPED_VARIABLE,
+                        _Token.OPEN_START_JSON):
+      id_, inline_value_id = self._OpenSectionOrTag(tokens)
+      if inline_value_id is not None:
+        raise ParseException(
+            '%s cannot have an inline value' % id_.GetDescription())
+      return [next_token.clazz(id_)]
+    elif next_token is _Token.OPEN_START_PARTIAL:
+      tokens.Advance()
+      column_start = tokens.next_column + 1
+      id_ = _Identifier(tokens.AdvanceToNextWhitespace(),
+                        tokens.next_line,
+                        column_start)
+      partial_node = _PartialNode(id_)
+      while tokens.next_token is _Token.CHARACTER:
+        tokens.SkipWhitespace()
+        key = tokens.AdvanceOverNextString(excluded=':')
+        tokens.Advance()
+        column_start = tokens.next_column + 1
+        id_ = _Identifier(tokens.AdvanceToNextWhitespace(),
+                          tokens.next_line,
+                          column_start)
+        if key == '@':
+          partial_node.SetLocalContext(id_)
+        else:
+          partial_node.AddArgument(key, id_)
+      tokens.AdvanceOver(_Token.CLOSE_MUSTACHE)
+      return [partial_node]
+    elif next_token is _Token.OPEN_START_SECTION:
+      id_, inline_node = self._OpenSectionOrTag(tokens)
+      nodes = []
+      if inline_node is None:
+        section = self._ParseSection(tokens)
+        self._CloseSection(tokens, id_)
+        nodes = []
+        if section is not None:
+          nodes.append(_SectionNode(id_, section))
+      else:
+        nodes.append(_SectionNode(id_, inline_node))
+      return nodes
+    elif next_token in (_Token.OPEN_START_VERTED_SECTION,
+                        _Token.OPEN_START_INVERTED_SECTION):
+      id_, inline_node = self._OpenSectionOrTag(tokens)
+      nodes = []
+      if inline_node is None:
+        section = self._ParseSection(tokens)
+        else_section = None
+        if tokens.next_token is _Token.OPEN_ELSE:
+          self._OpenElse(tokens, id_)
+          else_section = self._ParseSection(tokens)
+        self._CloseSection(tokens, id_)
+        if section:
+          nodes.append(next_token.clazz(id_, section))
+        if else_section:
+          nodes.append(next_token.ElseNodeClass()(id_, else_section))
+      else:
+        nodes.append(next_token.clazz(id_, inline_node))
+      return nodes
+    elif next_token is _Token.OPEN_COMMENT:
+      start_line = tokens.next_line
+      self._AdvanceOverComment(tokens)
+      return [_CommentNode(start_line, tokens.next_line)]
+
   def _AdvanceOverComment(self, tokens):
     tokens.AdvanceOver(_Token.OPEN_COMMENT)
     comment = _StringBuilder()
     depth = 1
     while tokens.HasNext() and depth > 0:
-      if tokens.next_token == _Token.OPEN_COMMENT:
+      if tokens.next_token is _Token.OPEN_COMMENT:
         depth += 1
-      elif tokens.next_token == _Token.CLOSE_COMMENT:
+      elif tokens.next_token is _Token.CLOSE_COMMENT:
         depth -= 1
       if depth > 0:
         comment.Append(tokens.next_contents)
@@ -827,17 +858,35 @@ class Handlebar(object):
     return comment.ToString()
 
   def _OpenSectionOrTag(self, tokens):
-    open_token = tokens.next_token
+    def NextIdentifierArgs():
+      tokens.SkipWhitespace()
+      line = tokens.next_line
+      column = tokens.next_column + 1
+      name = tokens.AdvanceToNextWhitespace()
+      tokens.SkipWhitespace()
+      return (name, line, column)
+    close_token = (_Token.CLOSE_MUSTACHE3
+                   if tokens.next_token is _Token.OPEN_UNESCAPED_VARIABLE else
+                   _Token.CLOSE_MUSTACHE)
     tokens.Advance()
-    column_start = tokens.next_column + 1
-    id_ = _Identifier(tokens.AdvanceOverNextString(),
-                      tokens.next_line,
-                      column_start)
-    if open_token == _Token.OPEN_UNESCAPED_VARIABLE:
-      tokens.AdvanceOver(_Token.CLOSE_MUSTACHE3)
+    id_ = _Identifier(*NextIdentifierArgs())
+    if tokens.next_token is close_token:
+      tokens.AdvanceOver(close_token)
+      inline_node = None
     else:
-      tokens.AdvanceOver(_Token.CLOSE_MUSTACHE)
-    return id_
+      name, line, column = NextIdentifierArgs()
+      tokens.AdvanceOver(_Token.INLINE_END_SECTION)
+      # Support select other types of nodes, the most useful being partial.
+      clazz = _UnescapedVariableNode
+      if name.startswith('*'):
+        clazz = _JsonNode
+      elif name.startswith('+'):
+        clazz = _PartialNode
+      if clazz is not _UnescapedVariableNode:
+        name = name[1:]
+        column += 1
+      inline_node = clazz(_Identifier(name, line, column))
+    return (id_, inline_node)
 
   def _CloseSection(self, tokens, id_):
     tokens.AdvanceOver(_Token.OPEN_END_SECTION)

@@ -1,0 +1,13 @@
+// Variables.
+Some boolean values -{{?t value/}} -{{?f value/}} -{{?t object.x/}} -{{?f object.x/}}.
+Inverted: -{{^t value/}} -{{^f value/}} -{{^t object.x/}} -{{^f object.x/}}.
+Other conditions: -{{?value value/}} -{{^value value/}}.
+List: -{{#list @/}} -{{#list value/}}.
+Object: -{{#object x/}} -{{?object x/}} -{{^object x/}}.
+Object list: {{#objectList x/}}.
+// Partials.
+Some partials:
+-{{?t +partials.selfClosing_p1 /}} -{{?f +partials.selfClosing_p1 /}}
+-{{^t +partials.selfClosing_p1 /}} -{{^f +partials.selfClosing_p1 /}}
+// JSON.
+Some JSON: -{{?t *list /}} -{{?f *list /}} -{{^t *list /}} -{{^f *list /}}

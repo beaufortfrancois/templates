@@ -1,0 +1,8 @@
+{
+  "t": true,
+  "f": false,
+  "value": 42,
+  "list": [1, 2, 3],
+  "object": {"x": 43},
+  "objectList": [{"x": 1}, {"x": 2}, {"x": 3}]
+}

@@ -1,0 +1,13 @@
+// Variables.
+Some boolean values -42 - -43 -.
+Inverted: - -42 - -43.
+Other conditions: -42 -.
+List: -123 -424242.
+Object: -43 -43 -.
+Object list: 123.
+// Partials.
+Some partials:
+-This is a partial. -
+- -This is a partial.
+// JSON.
+Some JSON: -[1,2,3] - - -[1,2,3]
