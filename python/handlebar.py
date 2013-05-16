@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# TODO: Some character other than {{{ }}} to print unescaped content.
+# TODO: Some character other than {{{ }}} to print unescaped content?
 # TODO: Only have @ while in a loop, and only defined in the top context of
 #       the loop.
 # TODO: Consider trimming spaces around identifers like {{?t foo}}.
@@ -57,12 +57,19 @@ class ParseException(Exception):
   def __init__(self, error):
     Exception.__init__(self, error)
 
-class _RenderResult(object):
+class RenderResult(object):
   '''The result of a render operation.
   '''
   def __init__(self, text, errors):
     self.text = text;
     self.errors = errors
+
+  def __str__(self):
+    return self.text
+
+  def __repr__(self):
+    return '%s(text=%s, errors=%s)' % (
+        self.__class__.__name__, self.text, self.errors)
 
 class _StringBuilder(object):
   '''Efficiently builds strings.
@@ -241,7 +248,7 @@ class _RenderState(object):
     self.text.Append(text)
 
   def GetResult(self):
-    return _RenderResult(self.text.ToString(), self._errors);
+    return RenderResult(self.text.ToString(), self._errors);
 
 class _Identifier(object):
   ''' An identifier of the form '@', 'foo.bar.baz', or '@.foo.bar.baz'.
@@ -253,7 +260,7 @@ class _Identifier(object):
     if name == '':
       raise ParseException('Empty identifier %s' % self.GetDescription())
     for part in name.split('.'):
-      if part != '@' and not re.match('^[a-zA-Z0-9_-]+$', part):
+      if part != '@' and not re.match('^[a-zA-Z0-9_/-]+$', part):
         raise ParseException('Invalid identifier %s' % self.GetDescription())
 
   def GetDescription(self):
@@ -607,9 +614,7 @@ class _PartialNode(_LeafNode):
   def SetLocalContext(self, id_):
     self._local_context_id = id_
 
-# List of tokens in order of longest to shortest, to avoid any prefix matching
-# issues.
-TokenValues = []
+_TOKENS = {}
 
 class _Token(object):
   ''' The tokens that can appear in a template.
@@ -619,7 +624,7 @@ class _Token(object):
       self.name = name
       self.text = text
       self.clazz = clazz
-      TokenValues.append(self)
+      _TOKENS[text] = self
 
     def ElseNodeClass(self):
       if self.clazz == _VertedSectionNode:
@@ -627,6 +632,9 @@ class _Token(object):
       if self.clazz == _InvertedSectionNode:
         return _VertedSectionNode
       raise ValueError('%s cannot have an else clause.' % self.clazz)
+
+    def __str__(self):
+      return '%s(%s)' % (self.name, self.text)
 
   OPEN_START_SECTION          = Data('OPEN_START_SECTION'         , '{{#', _SectionNode)
   OPEN_START_VERTED_SECTION   = Data('OPEN_START_VERTED_SECTION'  , '{{?', _VertedSectionNode)
@@ -648,39 +656,39 @@ class _TokenStream(object):
   ''' Tokeniser for template parsing.
   '''
   def __init__(self, string):
-    self._remainder = string
     self.next_token = None
-    self.next_contents = None
     self.next_line = _Line(1)
     self.next_column = 0
+    self._string = string
+    self._cursor = 0
     self.Advance()
 
   def HasNext(self):
     return self.next_token is not None
 
   def Advance(self):
-    if self.next_contents == '\n':
+    if self._cursor > 0 and self._string[self._cursor - 1] == '\n':
       self.next_line = _Line(self.next_line.number + 1)
       self.next_column = 0
     elif self.next_token is not None:
       self.next_column += len(self.next_token.text)
 
     self.next_token = None
-    self.next_contents = None
 
-    if self._remainder == '':
+    if self._cursor == len(self._string):
       return None
+    assert self._cursor < len(self._string)
 
-    for token in TokenValues:
-      if self._remainder.startswith(token.text):
-        self.next_token = token
-        break
+    if (self._cursor + 1 < len(self._string) and
+        self._string[self._cursor + 1] in '{}'):
+      self.next_token = (
+          _TOKENS.get(self._string[self._cursor:self._cursor+3]) or
+          _TOKENS.get(self._string[self._cursor:self._cursor+2]))
 
-    if not self.next_token:
+    if self.next_token is None:
       self.next_token = _Token.CHARACTER
 
-    self.next_contents = self._remainder[0:len(self.next_token.text)]
-    self._remainder = self._remainder[len(self.next_token.text):]
+    self._cursor += len(self.next_token.text)
     return self
 
   def AdvanceOver(self, token):
@@ -692,19 +700,21 @@ class _TokenStream(object):
     return self.Advance()
 
   def AdvanceOverNextString(self, excluded=''):
-    buf = _StringBuilder()
-    while self.next_token is _Token.CHARACTER and \
-          excluded.find(self.next_contents) == -1:
-      buf.Append(self.next_contents)
+    start = self._cursor - len(self.next_token.text)
+    while (self.next_token is _Token.CHARACTER and
+           # Can use -1 here because token length of CHARACTER is 1.
+           self._string[self._cursor - 1] not in excluded):
       self.Advance()
-    return buf.ToString()
+    end = self._cursor - (len(self.next_token.text) if self.next_token else 0)
+    return self._string[start:end]
 
   def AdvanceToNextWhitespace(self):
     return self.AdvanceOverNextString(excluded=' \n\r\t')
 
   def SkipWhitespace(self):
-    while len(self.next_contents) > 0 and \
-          ' \n\r\t'.find(self.next_contents) >= 0:
+    while (self.next_token is _Token.CHARACTER and
+           # Can use -1 here because token length of CHARACTER is 1.
+           self._string[self._cursor - 1] in ' \n\r\t'):
       self.Advance()
 
 class Handlebar(object):
@@ -845,17 +855,13 @@ class Handlebar(object):
 
   def _AdvanceOverComment(self, tokens):
     tokens.AdvanceOver(_Token.OPEN_COMMENT)
-    comment = _StringBuilder()
     depth = 1
     while tokens.HasNext() and depth > 0:
       if tokens.next_token is _Token.OPEN_COMMENT:
         depth += 1
       elif tokens.next_token is _Token.CLOSE_COMMENT:
         depth -= 1
-      if depth > 0:
-        comment.Append(tokens.next_contents)
       tokens.Advance()
-    return comment.ToString()
 
   def _OpenSectionOrTag(self, tokens):
     def NextIdentifierArgs():
