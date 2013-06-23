@@ -12,8 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# TODO: Pragmas for asserting the presence of variables.
+# TODO: New name, not "handlebar".
 # TODO: Escaping control characters somehow. e.g. \{{, \{{-.
+# TODO: Make a variable on a single line {{foo}} not print the line if it
+#       doesn't resolve to anything. Likewise comments and assertions.
 
 import json
 import re
@@ -231,9 +233,11 @@ class _RenderState(object):
     self._errors = []
     self._stack = _stack
 
-  def AddResolutionError(self, id_):
-    self._errors.append(
-        id_.CreateResolutionErrorMessage(self._name, stack=self._stack))
+  def AddResolutionError(self, id_, description=None):
+    message = id_.CreateResolutionErrorMessage(self._name, stack=self._stack)
+    if description is not None:
+      message = '%s (%s)' % (message, description)
+    self._errors.append(message)
 
   def Copy(self):
     return _RenderState(
@@ -291,6 +295,9 @@ class _Line(object):
   def __init__(self, number):
     self.number = number
 
+  def Next(self):
+    return _Line(self.number + 1)
+
   def __repr__(self):
     return str(self.number)
 
@@ -323,6 +330,9 @@ class _LeafNode(object):
   def GetEndLine(self):
     return self._end_line
 
+  def __str__(self):
+    return repr(self)
+
 class _DecoratorNode(object):
   def __init__(self, content):
     self._content = content
@@ -351,8 +361,8 @@ class _DecoratorNode(object):
   def __repr__(self):
     return str(self._content)
 
-    def __str__(self):
-      return repr(self)
+  def __str__(self):
+    return repr(self)
 
 class _InlineNode(_DecoratorNode):
   def __init__(self, content):
@@ -424,9 +434,6 @@ class _NodeCollection(object):
   def __repr__(self):
     return ''.join(str(node) for node in self._nodes)
 
-  def __str__(self):
-    return repr(self)
-
 class _StringNode(object):
   ''' Just a string.
   '''
@@ -473,9 +480,6 @@ class _StringNode(object):
   def __repr__(self):
     return self._string
 
-  def __str__(self):
-    return repr(self)
-
 class _EscapedVariableNode(_LeafNode):
   ''' {{foo}}
   '''
@@ -496,9 +500,6 @@ class _EscapedVariableNode(_LeafNode):
   def __repr__(self):
     return '{{%s}}' % self._id
 
-  def __str__(self):
-    return repr(self)
-
 class _UnescapedVariableNode(_LeafNode):
   ''' {{{foo}}}
   '''
@@ -517,9 +518,6 @@ class _UnescapedVariableNode(_LeafNode):
   def __repr__(self):
     return '{{{%s}}}' % self._id
 
-  def __str__(self):
-    return repr(self)
-
 class _CommentNode(_LeafNode):
   '''{{- This is a comment -}}
   An empty placeholder node for correct indented rendering behaviour.
@@ -532,9 +530,6 @@ class _CommentNode(_LeafNode):
 
   def __repr__(self):
     return '<comment>'
-
-  def __str__(self):
-    return repr(self)
 
 class _SectionNode(_DecoratorNode):
   ''' {{#foo}} ... {{/foo}}
@@ -561,9 +556,6 @@ class _SectionNode(_DecoratorNode):
     return '{{#%s}}%s{{/%s}}' % (
         self._id, _DecoratorNode.__repr__(self), self._id)
 
-  def __str__(self):
-    return repr(self)
-
 class _VertedSectionNode(_DecoratorNode):
   ''' {{?foo}} ... {{/foo}}
   '''
@@ -579,9 +571,6 @@ class _VertedSectionNode(_DecoratorNode):
   def __repr__(self):
     return '{{?%s}}%s{{/%s}}' % (
         self._id, _DecoratorNode.__repr__(self), self._id)
-
-  def __str__(self):
-    return repr(self)
 
   @staticmethod
   def ShouldRender(value):
@@ -609,8 +598,20 @@ class _InvertedSectionNode(_DecoratorNode):
     return '{{^%s}}%s{{/%s}}' % (
         self._id, _DecoratorNode.__repr__(self), self._id)
 
-  def __str__(self):
-    return repr(self)
+class _AssertionNode(_LeafNode):
+  ''' {{!foo Some comment about foo}}
+  '''
+  def __init__(self, id_, description):
+    _LeafNode.__init__(self, id_.line, id_.line)
+    self._id = id_
+    self._description = description
+
+  def Render(self, render_state):
+    if render_state.contexts.Resolve(self._id.name) is None:
+      render_state.AddResolutionError(self._id, description=self._description)
+
+  def __repr__(self):
+    return '{{!%s %s}}' % (self._id, self._description)
 
 class _JsonNode(_LeafNode):
   ''' {{*foo}}
@@ -628,9 +629,6 @@ class _JsonNode(_LeafNode):
 
   def __repr__(self):
     return '{{*%s}}' % self._id
-
-  def __str__(self):
-    return repr(self)
 
 class _PartialNode(_LeafNode):
   ''' {{+foo}}
@@ -682,9 +680,6 @@ class _PartialNode(_LeafNode):
   def __repr__(self):
     return '{{+%s}}' % self._id
 
-  def __str__(self):
-    return repr(self)
-
 _TOKENS = {}
 
 class _Token(object):
@@ -702,7 +697,7 @@ class _Token(object):
         return _InvertedSectionNode
       if self.clazz == _InvertedSectionNode:
         return _VertedSectionNode
-      raise ValueError('%s cannot have an else clause.' % self.clazz)
+      return None
 
     def __repr__(self):
       return self.name
@@ -713,8 +708,9 @@ class _Token(object):
   OPEN_START_SECTION          = Data('OPEN_START_SECTION'         , '{{#', _SectionNode)
   OPEN_START_VERTED_SECTION   = Data('OPEN_START_VERTED_SECTION'  , '{{?', _VertedSectionNode)
   OPEN_START_INVERTED_SECTION = Data('OPEN_START_INVERTED_SECTION', '{{^', _InvertedSectionNode)
-  OPEN_START_JSON             = Data('OPEN_START_JSON'            , '{{*', _JsonNode)
-  OPEN_START_PARTIAL          = Data('OPEN_START_PARTIAL'         , '{{+', _PartialNode)
+  OPEN_ASSERTION              = Data('OPEN_ASSERTION'             , '{{!', _AssertionNode)
+  OPEN_JSON                   = Data('OPEN_JSON'                  , '{{*', _JsonNode)
+  OPEN_PARTIAL                = Data('OPEN_PARTIAL'               , '{{+', _PartialNode)
   OPEN_ELSE                   = Data('OPEN_ELSE'                  , '{{:', None)
   OPEN_END_SECTION            = Data('OPEN_END_SECTION'           , '{{/', None)
   INLINE_END_SECTION          = Data('INLINE_END_SECTION'         , '/}}', None)
@@ -742,7 +738,7 @@ class _TokenStream(object):
 
   def Advance(self):
     if self._cursor > 0 and self._string[self._cursor - 1] == '\n':
-      self.next_line = _Line(self.next_line.number + 1)
+      self.next_line = self.next_line.Next()
       self.next_column = 0
     elif self.next_token is not None:
       self.next_column += len(self.next_token.text)
@@ -869,58 +865,75 @@ class Handlebar(object):
     next_token = tokens.next_token
 
     if next_token is _Token.CHARACTER:
+      # Plain strings.
       start_line = tokens.next_line
       string = tokens.AdvanceOverNextString()
       return [_StringNode(string, start_line, tokens.next_line)]
     elif next_token in (_Token.OPEN_VARIABLE,
                         _Token.OPEN_UNESCAPED_VARIABLE,
-                        _Token.OPEN_START_JSON):
-      id_, inline_value_id = self._OpenSectionOrTag(tokens)
-      if inline_value_id is not None:
-        raise ParseException(
-            '%s cannot have an inline value' % id_.GetDescription())
-      return [next_token.clazz(id_)]
-    elif next_token is _Token.OPEN_START_PARTIAL:
+                        _Token.OPEN_JSON):
       tokens.Advance()
-      column_start = tokens.next_column + 1
-      id_ = _Identifier(tokens.AdvanceToNextWhitespace(),
-                        tokens.next_line,
-                        column_start)
-      partial_node = _PartialNode(id_)
-      self._ParsePartialNodeArgs(partial_node, tokens)
+      # Inline nodes that don't take arguments.
+      close_token = (_Token.CLOSE_MUSTACHE3
+                     if next_token is _Token.OPEN_UNESCAPED_VARIABLE else
+                     _Token.CLOSE_MUSTACHE)
+      id_ = self._NextIdentifier(tokens)
+      tokens.AdvanceOver(close_token)
+      return [next_token.clazz(id_)]
+    elif next_token in (_Token.OPEN_ASSERTION,
+                        _Token.OPEN_PARTIAL):
+      # Inline node that take arguments.
+      tokens.Advance()
+      id_ = self._NextIdentifier(tokens)
+      if next_token == _Token.OPEN_ASSERTION:
+        node = next_token.clazz(id_, tokens.AdvanceOverNextString())
+      else:
+        node = next_token.clazz(id_)
+        self._ParsePartialNodeArgs(node, tokens)
       tokens.AdvanceOver(_Token.CLOSE_MUSTACHE)
-      return [partial_node]
-    elif next_token is _Token.OPEN_START_SECTION:
-      id_, inline_node = self._OpenSectionOrTag(tokens)
-      nodes = []
-      if inline_node is None:
-        section = self._ParseSection(tokens)
-        self._CloseSection(tokens, id_)
-        nodes = []
-        if section is not None:
-          nodes.append(_SectionNode(id_, section))
-      else:
-        nodes.append(_SectionNode(id_, inline_node))
-      return nodes
-    elif next_token in (_Token.OPEN_START_VERTED_SECTION,
+      return [node]
+    elif next_token in (_Token.OPEN_START_SECTION,
+                        _Token.OPEN_START_VERTED_SECTION,
                         _Token.OPEN_START_INVERTED_SECTION):
-      id_, inline_node = self._OpenSectionOrTag(tokens)
+      # Block nodes, though they may have inline syntax like {{#foo bar /}}.
+      tokens.Advance()
+      id_ = self._NextIdentifier(tokens)
+      if tokens.next_token is not _Token.CLOSE_MUSTACHE:
+        # Inline syntax. Support select node types: variables, partials, JSON.
+        line, column = (tokens.next_line, tokens.next_column + 1)
+        name = tokens.AdvanceToNextWhitespace()
+        clazz = _UnescapedVariableNode
+        if name.startswith('*'):
+          clazz = _JsonNode
+        elif name.startswith('+'):
+          clazz = _PartialNode
+        if clazz is not _UnescapedVariableNode:
+          name = name[1:]
+          column += 1
+        inline_node = clazz(_Identifier(name, line, column))
+        if clazz is _PartialNode:
+          self._ParsePartialNodeArgs(inline_node, tokens)
+        tokens.SkipWhitespace()
+        tokens.AdvanceOver(_Token.INLINE_END_SECTION)
+        return [next_token.clazz(id_, inline_node)]
+      # Block syntax.
+      tokens.AdvanceOver(_Token.CLOSE_MUSTACHE)
+      section = self._ParseSection(tokens)
+      else_node_class = next_token.ElseNodeClass()  # may not have one
+      else_section = None
+      if (else_node_class is not None and
+          tokens.next_token is _Token.OPEN_ELSE):
+        self._OpenElse(tokens, id_)
+        else_section = self._ParseSection(tokens)
+      self._CloseSection(tokens, id_)
       nodes = []
-      if inline_node is None:
-        section = self._ParseSection(tokens)
-        else_section = None
-        if tokens.next_token is _Token.OPEN_ELSE:
-          self._OpenElse(tokens, id_)
-          else_section = self._ParseSection(tokens)
-        self._CloseSection(tokens, id_)
-        if section:
-          nodes.append(next_token.clazz(id_, section))
-        if else_section:
-          nodes.append(next_token.ElseNodeClass()(id_, else_section))
-      else:
-        nodes.append(next_token.clazz(id_, inline_node))
+      if section is not None:
+        nodes.append(next_token.clazz(id_, section))
+      if else_section is not None:
+        nodes.append(else_node_class(id_, else_section))
       return nodes
     elif next_token is _Token.OPEN_COMMENT:
+      # Comments.
       start_line = tokens.next_line
       self._AdvanceOverComment(tokens)
       return [_CommentNode(start_line, tokens.next_line)]
@@ -934,39 +947,6 @@ class Handlebar(object):
       elif tokens.next_token is _Token.CLOSE_COMMENT:
         depth -= 1
       tokens.Advance()
-
-  def _OpenSectionOrTag(self, tokens):
-    def NextIdentifierArgs():
-      tokens.SkipWhitespace()
-      line = tokens.next_line
-      column = tokens.next_column + 1
-      name = tokens.AdvanceToNextWhitespace()
-      tokens.SkipWhitespace()
-      return (name, line, column)
-    close_token = (_Token.CLOSE_MUSTACHE3
-                   if tokens.next_token is _Token.OPEN_UNESCAPED_VARIABLE else
-                   _Token.CLOSE_MUSTACHE)
-    tokens.Advance()
-    id_ = _Identifier(*NextIdentifierArgs())
-    if tokens.next_token is close_token:
-      tokens.AdvanceOver(close_token)
-      inline_node = None
-    else:
-      name, line, column = NextIdentifierArgs()
-      # Support select other types of nodes, the most useful being partial.
-      clazz = _UnescapedVariableNode
-      if name.startswith('*'):
-        clazz = _JsonNode
-      elif name.startswith('+'):
-        clazz = _PartialNode
-      if clazz is not _UnescapedVariableNode:
-        name = name[1:]
-        column += 1
-      inline_node = clazz(_Identifier(name, line, column))
-      if clazz is _PartialNode:
-        self._ParsePartialNodeArgs(inline_node, tokens)
-      tokens.AdvanceOver(_Token.INLINE_END_SECTION)
-    return (id_, inline_node)
 
   def _CloseSection(self, tokens, id_):
     tokens.AdvanceOver(_Token.OPEN_END_SECTION)
@@ -989,13 +969,16 @@ class Handlebar(object):
     while tokens.next_token is _Token.CHARACTER:
       key = tokens.AdvanceOverNextString(excluded=':')
       tokens.Advance()
-      tokens.SkipWhitespace();
-      column_start = tokens.next_column + 1
-      id_ = _Identifier(tokens.AdvanceToNextWhitespace(),
-                        tokens.next_line,
-                        column_start)
-      partial_node.AddArgument(key, id_)
-      tokens.SkipWhitespace()
+      partial_node.AddArgument(key, self._NextIdentifier(tokens))
+
+  def _NextIdentifier(self, tokens):
+    tokens.SkipWhitespace()
+    column_start = tokens.next_column + 1
+    id_ = _Identifier(tokens.AdvanceToNextWhitespace(),
+                      tokens.next_line,
+                      column_start)
+    tokens.SkipWhitespace()
+    return id_
 
   def Render(self, *user_contexts):
     '''Renders this template given a variable number of contexts to read out

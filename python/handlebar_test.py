@@ -28,6 +28,8 @@ def _Read(name):
 class HandlebarTest(unittest.TestCase):
   def testAtInLists(self):
     self._Run('atInLists', partials=('one',), expect_errors=True)
+  def testAssertions(self):
+    self._Run('assertions', expect_errors=True)
   def testCleanPartials(self):
     self._Run('cleanPartials', partials=('p1', 'p2'))
   def testCleanRendering(self):

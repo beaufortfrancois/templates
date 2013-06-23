@@ -1,0 +1,5 @@
+Foo exists.
+
+Bar does not exist.
+
+Failed to resolve 'bar' at line 7 column 4 in &lt;root&gt; (Bar existence)
