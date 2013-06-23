@@ -3,8 +3,8 @@
 {{?one.bar}}one.bar{{/one.bar}}
 {{?one.baz}}one.baz{{/one.baz}}
 {{?two}}two{{/two}}
-{{?two}}{{?foo}}two inherit?{{/foo}}{{/two}}
-{{#two}}{{?foo}}two inherit#{{/foo}}{{/two}}
+{{?two}}{{?two.foo}}two inherit?{{/two.foo}}{{/two}}
+{{#two}}{{?two.foo}}two inherit#{{/two.foo}}{{/two}}
 {{?two.foo}}two.foo{{/two.foo}}
 {{?two.bar}}two.bar{{/two.bar}}
 {{?two.baz}}two.baz{{/two.baz}}

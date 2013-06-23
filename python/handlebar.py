@@ -20,7 +20,6 @@
 # TODO: Escaping control characters somehow. e.g. \{{, \{{-.
 # TODO: Dump warnings-so-far into the output.
 # TODO: For loops, only push @ not all the properties.
-# TODO: Don't push context for ?.
 
 import json
 import re
@@ -581,12 +580,7 @@ class _VertedSectionNode(_DecoratorNode):
   def Render(self, render_state):
     value = render_state.contexts.Resolve(self._id.name)
     if _VertedSectionNode.ShouldRender(value):
-      is_context = hasattr(value, 'get')
-      if is_context:
-        render_state.contexts.Push(value)
       self._content.Render(render_state)
-      if is_context:
-        render_state.contexts.Pop()
 
   def __repr__(self):
     return '{{?%s}}%s{{/%s}}' % (
