@@ -1,0 +1,9 @@
+{{?_.errors}}
+  There are no errors yet. This shouldn't happen.
+{{/_.errors}}
+{{_.errors}}
+{{foo}} will generate an error.
+{{bar}} will not.
+{{_.errors}}
+{{baz}} will generate another error.
+{{_.errors}}

@@ -1,0 +1,9 @@
+
+ will generate an error.
+bar will not.
+Failed to resolve '_.errors' at line 4 column 3 in &lt;root&gt;
+Failed to resolve 'foo' at line 5 column 3 in &lt;root&gt;
+ will generate another error.
+Failed to resolve '_.errors' at line 4 column 3 in &lt;root&gt;
+Failed to resolve 'foo' at line 5 column 3 in &lt;root&gt;
+Failed to resolve 'baz' at line 8 column 3 in &lt;root&gt;

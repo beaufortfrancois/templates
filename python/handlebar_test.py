@@ -44,6 +44,8 @@ class HandlebarTest(unittest.TestCase):
     self._Run('emptyLists')
   def testEmptySections(self):
     self._Run('emptySections')
+  def testErrors(self):
+    self._Run('errors', expect_errors=True)
   def testEscaping(self):
     self._Run('escaping')
   def testExistence(self):

@@ -14,7 +14,6 @@
 
 # TODO: Pragmas for asserting the presence of variables.
 # TODO: Escaping control characters somehow. e.g. \{{, \{{-.
-# TODO: Dump warnings-so-far into the output.
 
 import json
 import re
@@ -209,6 +208,19 @@ class _Stack(object):
     descended.append(_Stack.Entry(name, id_))
     return _Stack(entries=descended)
 
+class _InternalContext(object):
+  def __init__(self):
+    self._render_state = None
+
+  def SetRenderState(self, render_state):
+    self._render_state = render_state
+
+  def get(self, key):
+    if key == 'errors':
+      errors = self._render_state._errors
+      return '\n'.join(errors) if errors else None
+    return None
+
 class _RenderState(object):
   '''The state of a render call.
   '''
@@ -267,7 +279,7 @@ class _Identifier(object):
       for entry in stack.entries:
         message.Append('  included as %s in %s\n' % (entry.id_.GetDescription(),
                                                      entry.name))
-    return message.ToString()
+    return message.ToString().strip()
 
   def __repr__(self):
     return self.name
@@ -985,12 +997,15 @@ class Handlebar(object):
       partial_node.AddArgument(key, id_)
       tokens.SkipWhitespace()
 
-  def Render(self, *contexts):
+  def Render(self, *user_contexts):
     '''Renders this template given a variable number of contexts to read out
     values from (such as those appearing in {{foo}}).
     '''
     name = self._name or '<root>'
-    render_state = _RenderState(name, _Contexts(contexts))
+    internal_context = _InternalContext()
+    render_state = _RenderState(
+        name, _Contexts([{'_': internal_context}] + list(user_contexts)))
+    internal_context.SetRenderState(render_state)
     self._top_node.Render(render_state)
     return render_state.GetResult()
 
