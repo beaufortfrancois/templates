@@ -8,8 +8,8 @@ arg:arg2: {{+partials.partialInheritance_p1 arg:arg2}}
 
 {{#deep}}
  no args: {{+partials.partialInheritance_p1}}
-arg:arg1: {{+partials.partialInheritance_p1 arg:arg1}}
-arg:arg2: {{+partials.partialInheritance_p1 arg:arg2}}
+arg:arg1: {{+partials.partialInheritance_p1 arg: arg1}}
+arg:arg2: {{+partials.partialInheritance_p1 arg: arg2}}
 
 {{#moreDeep}}
  no args: {{+partials.partialInheritance_p1}}

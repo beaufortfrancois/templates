@@ -5,9 +5,13 @@ Other conditions: -42 -.
 List: -123 -424242.
 Object: -43 -43 -.
 Object list: 123.
+
 // Partials.
 Some partials:
--This is a partial. -
-- -This is a partial.
+This is a partial.arg1: foo valuearg2: bar value
+
+
+This is a partial.arg1: arg2: 
+
 // JSON.
 Some JSON: -[1,2,3] - - -[1,2,3]

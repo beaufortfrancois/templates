@@ -15,11 +15,12 @@
 # TODO: Some character other than {{{ }}} to print unescaped content?
 # TODO: Only have @ while in a loop, and only defined in the top context of
 #       the loop.
-# TODO: Consider trimming spaces around identifers like {{?t foo}}.
 # TODO: Only transfer global contexts into partials, not the top local.
 # TODO: Pragmas for asserting the presence of variables.
 # TODO: Escaping control characters somehow. e.g. \{{, \{{-.
 # TODO: Dump warnings-so-far into the output.
+# TODO: For loops, only push @ not all the properties.
+# TODO: Don't push context for ?.
 
 import json
 import re
@@ -580,9 +581,12 @@ class _VertedSectionNode(_DecoratorNode):
   def Render(self, render_state):
     value = render_state.contexts.Resolve(self._id.name)
     if _VertedSectionNode.ShouldRender(value):
-      render_state.contexts.Push(value)
+      is_context = hasattr(value, 'get')
+      if is_context:
+        render_state.contexts.Push(value)
       self._content.Render(render_state)
-      render_state.contexts.Pop()
+      if is_context:
+        render_state.contexts.Pop()
 
   def __repr__(self):
     return '{{?%s}}%s{{/%s}}' % (
@@ -717,6 +721,12 @@ class _Token(object):
         return _VertedSectionNode
       raise ValueError('%s cannot have an else clause.' % self.clazz)
 
+    def __repr__(self):
+      return self.name
+
+    def __str__(self):
+      return repr(self)
+
   OPEN_START_SECTION          = Data('OPEN_START_SECTION'         , '{{#', _SectionNode)
   OPEN_START_VERTED_SECTION   = Data('OPEN_START_VERTED_SECTION'  , '{{?', _VertedSectionNode)
   OPEN_START_INVERTED_SECTION = Data('OPEN_START_INVERTED_SECTION', '{{^', _InvertedSectionNode)
@@ -773,7 +783,7 @@ class _TokenStream(object):
     return self
 
   def AdvanceOver(self, token):
-    if self.next_token != token:
+    if self.next_token is not token:
       raise ParseException(
           'Expecting token %s but got %s at line %s' % (token.name,
                                                         self.next_token.name,
@@ -797,6 +807,15 @@ class _TokenStream(object):
            # Can use -1 here because token length of CHARACTER is 1.
            self._string[self._cursor - 1] in ' \n\r\t'):
       self.Advance()
+
+  def __repr__(self):
+    return '%s(next_token=%s, remainder=%s)' % (
+        self.__class__.__name__,
+        self.next_token,
+        self._string[self._cursor:])
+
+  def __str__(self):
+    return repr(self)
 
 class Handlebar(object):
   ''' A handlebar template.
@@ -885,18 +904,7 @@ class Handlebar(object):
                         tokens.next_line,
                         column_start)
       partial_node = _PartialNode(id_)
-      while tokens.next_token is _Token.CHARACTER:
-        tokens.SkipWhitespace()
-        key = tokens.AdvanceOverNextString(excluded=':')
-        tokens.Advance()
-        column_start = tokens.next_column + 1
-        id_ = _Identifier(tokens.AdvanceToNextWhitespace(),
-                          tokens.next_line,
-                          column_start)
-        if key == '@':
-          partial_node.SetLocalContext(id_)
-        else:
-          partial_node.AddArgument(key, id_)
+      self._ParsePartialNodeArgs(partial_node, tokens)
       tokens.AdvanceOver(_Token.CLOSE_MUSTACHE)
       return [partial_node]
     elif next_token is _Token.OPEN_START_SECTION:
@@ -962,7 +970,6 @@ class Handlebar(object):
       inline_node = None
     else:
       name, line, column = NextIdentifierArgs()
-      tokens.AdvanceOver(_Token.INLINE_END_SECTION)
       # Support select other types of nodes, the most useful being partial.
       clazz = _UnescapedVariableNode
       if name.startswith('*'):
@@ -973,6 +980,9 @@ class Handlebar(object):
         name = name[1:]
         column += 1
       inline_node = clazz(_Identifier(name, line, column))
+      if clazz is _PartialNode:
+        self._ParsePartialNodeArgs(inline_node, tokens)
+      tokens.AdvanceOver(_Token.INLINE_END_SECTION)
     return (id_, inline_node)
 
   def _CloseSection(self, tokens, id_):
@@ -990,6 +1000,22 @@ class Handlebar(object):
       raise ParseException(
           'Start section %s doesn\'t match else %s' % (id_, next_string))
     tokens.AdvanceOver(_Token.CLOSE_MUSTACHE)
+
+  def _ParsePartialNodeArgs(self, partial_node, tokens):
+    tokens.SkipWhitespace()
+    while tokens.next_token is _Token.CHARACTER:
+      key = tokens.AdvanceOverNextString(excluded=':')
+      tokens.Advance()
+      tokens.SkipWhitespace();
+      column_start = tokens.next_column + 1
+      id_ = _Identifier(tokens.AdvanceToNextWhitespace(),
+                        tokens.next_line,
+                        column_start)
+      if key == '@':
+        partial_node.SetLocalContext(id_)
+      else:
+        partial_node.AddArgument(key, id_)
+      tokens.SkipWhitespace()
 
   def Render(self, *contexts):
     '''Renders this template given a variable number of contexts to read out
