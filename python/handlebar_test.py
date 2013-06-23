@@ -26,6 +26,8 @@ def _Read(name):
     return f.read()
 
 class HandlebarTest(unittest.TestCase):
+  def testAtInLists(self):
+    self._Run('atInLists', partials=('one',), expect_errors=True)
   def testCleanPartials(self):
     self._Run('cleanPartials', partials=('p1', 'p2'))
   def testCleanRendering(self):
@@ -97,17 +99,26 @@ class HandlebarTest(unittest.TestCase):
     if partials is not None:
       partial_data = {}
       for partial in partials:
-        partial_name = '%s_%s' % (name, partial)
-        partial_data[partial_name] = Handlebar(
-            _Read('%s.template' % partial_name))
+        partial_data[partial] = Handlebar(
+            _Read('%s_%s.template' % (name, partial)))
       data['partials'] = partial_data
     result = Handlebar(template).Render(data)
     if not expect_errors and result.errors:
       self.fail(''.join(result.errors))
     if expected != result.text:
-      message = '\n'.join(('Expected:', expected.replace('\n', '$\n'),
-                           'Got:', result.text.replace('\n', '$\n')))
-      self.fail(message)
+      expected_lines = expected.replace('\n', '$\n').split('\n')
+      actual_lines = result.text.replace('\n', '$\n').split('\n')
+      max_expected_line_length = max(len(line) for line in expected_lines)
+      message = []
+      while expected_lines or actual_lines:
+        expected_line = expected_lines.pop(0) if expected_lines else ''
+        actual_line = actual_lines.pop(0) if actual_lines else ''
+        message.append(('%s %s%s | %s' % (
+            ' ' if expected_line == actual_line else '!',
+            expected_line,
+            ' ' * (max_expected_line_length - len(expected_line)),
+            actual_line)))
+      self.fail('\n' + '\n'.join(message))
 
 if __name__ == '__main__':
   unittest.main()

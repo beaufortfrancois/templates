@@ -12,14 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# TODO: Some character other than {{{ }}} to print unescaped content?
-# TODO: Only have @ while in a loop, and only defined in the top context of
-#       the loop.
-# TODO: Only transfer global contexts into partials, not the top local.
 # TODO: Pragmas for asserting the presence of variables.
 # TODO: Escaping control characters somehow. e.g. \{{, \{{-.
 # TODO: Dump warnings-so-far into the output.
-# TODO: For loops, only push @ not all the properties.
 
 import json
 import re
@@ -29,7 +24,7 @@ ctemplate. Use like:
 
   from handlebar import Handlebar
 
-  template = Handlebar('hello {{#foo}}{{bar}}{{/}} world')
+  template = Handlebar('hello {{#foo bar/}} world')
   input = {
     'foo': [
       { 'bar': 1 },
@@ -160,24 +155,13 @@ class _Contexts(object):
       # [0] is the stack of nodes that |found_key| has been found in.
       self._value_info[found_key][0].pop()
 
-  def GetTopLocal(self):
-    if len(self._nodes) == self._first_local:
-      return None
-    return self._nodes[-1]._value
-
   def Resolve(self, path):
     # This method is only efficient at finding |key|; if |tail| has a value (and
     # |key| evaluates to an indexable value) we'll need to descend into that.
     key, tail = path.split('.', 1) if '.' in path else (path, None)
-
-    if key == '@':
-      found = self._nodes[-1]._value
-    else:
-      found = self._FindNodeValue(key)
-
+    found = self._FindNodeValue(key)
     if tail is None:
       return found
-
     for part in tail.split('.'):
       if not hasattr(found, 'get'):
         return None
@@ -269,7 +253,7 @@ class _Identifier(object):
     if name == '':
       raise ParseException('Empty identifier %s' % self.GetDescription())
     for part in name.split('.'):
-      if part != '@' and not re.match('^[a-zA-Z0-9_/-]+$', part):
+      if not re.match('^[a-zA-Z0-9@_/-]+$', part):
         raise ParseException('Invalid identifier %s' % self.GetDescription())
 
   def GetDescription(self):
@@ -541,7 +525,7 @@ class _CommentNode(_LeafNode):
     return repr(self)
 
 class _SectionNode(_DecoratorNode):
-  ''' {{#foo}} ... {{/}}
+  ''' {{#foo}} ... {{/foo}}
   '''
   def __init__(self, id_, content):
     _DecoratorNode.__init__(self, content)
@@ -551,9 +535,7 @@ class _SectionNode(_DecoratorNode):
     value = render_state.contexts.Resolve(self._id.name)
     if isinstance(value, list):
       for item in value:
-        # Always push context, even if it's not "valid", since we want to
-        # be able to refer to items in a list such as [1,2,3] via @.
-        render_state.contexts.Push(item)
+        render_state.contexts.Push({'@': item})
         self._content.Render(render_state)
         render_state.contexts.Pop()
     elif hasattr(value, 'get'):
@@ -571,7 +553,7 @@ class _SectionNode(_DecoratorNode):
     return repr(self)
 
 class _VertedSectionNode(_DecoratorNode):
-  ''' {{?foo}} ... {{/}}
+  ''' {{?foo}} ... {{/foo}}
   '''
   def __init__(self, id_, content):
     _DecoratorNode.__init__(self, content)
@@ -600,7 +582,7 @@ class _VertedSectionNode(_DecoratorNode):
     return True
 
 class _InvertedSectionNode(_DecoratorNode):
-  ''' {{^foo}} ... {{/}}
+  ''' {{^foo}} ... {{/foo}}
   '''
   def __init__(self, id_, content):
     _DecoratorNode.__init__(self, content)
@@ -657,11 +639,6 @@ class _PartialNode(_LeafNode):
       return
 
     partial_render_state = render_state.ForkPartial(value._name, self._id)
-
-    # TODO: Don't do this. Force callers to do this by specifying an @ argument.
-    top_local = render_state.contexts.GetTopLocal()
-    if top_local is not None:
-      partial_render_state.contexts.Push(top_local)
 
     if self._args is not None:
       arg_context = {}
@@ -1005,10 +982,7 @@ class Handlebar(object):
       id_ = _Identifier(tokens.AdvanceToNextWhitespace(),
                         tokens.next_line,
                         column_start)
-      if key == '@':
-        partial_node.SetLocalContext(id_)
-      else:
-        partial_node.AddArgument(key, id_)
+      partial_node.AddArgument(key, id_)
       tokens.SkipWhitespace()
 
   def Render(self, *contexts):

@@ -4,16 +4,16 @@ Inverted: -{{^t value/}} -{{^f value/}} -{{^t object.x/}} -{{^f object.x/}}.
 Other conditions: -{{?value value/}} -{{^value value/}}.
 List: -{{#list @/}} -{{#list value/}}.
 Object: -{{#object x/}} -{{?object object.x/}} -{{^object object.x/}}.
-Object list: {{#objectList x/}}.
+Object list: {{#objectList @.x/}}.
 
 // Partials.
 Some partials:
-{{?t +partials.selfClosing_p1 arg1: foo
-                              arg2: bar /}}
-{{?f +partials.selfClosing_p1 arg1: foo
-                              arg2: bar /}}
-{{^t +partials.selfClosing_p1 /}}
-{{^f +partials.selfClosing_p1 /}}
+{{?t +partials.p1 arg1: foo
+                  arg2: bar /}}
+{{?f +partials.p1 arg1: foo
+                  arg2: bar /}}
+{{^t +partials.p1 /}}
+{{^f +partials.p1 /}}
 
 // JSON.
 Some JSON: -{{?t *list /}} -{{?f *list /}} -{{^t *list /}} -{{^f *list /}}

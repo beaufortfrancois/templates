@@ -13,23 +13,23 @@ Give me a 789 (seven eight nine).
 Give me an abc.
   {"value":"a"}
   a
-  a
+  
   {"value":"b"}
   b
-  b
+  
   {"value":"c"}
   c
-  c
+  
   Give me an abc.
     {"value":"a"}
     a
-    a
+    
     {"value":"b"}
     b
-    b
+    
     {"value":"c"}
     c
-    c
+    
 
 Should render blank lines between each of these:
   1
