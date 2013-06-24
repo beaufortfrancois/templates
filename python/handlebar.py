@@ -291,19 +291,6 @@ class _Identifier(object):
   def __str__(self):
     return repr(self)
 
-class _Line(object):
-  def __init__(self, number):
-    self.number = number
-
-  def Next(self):
-    return _Line(self.number + 1)
-
-  def __repr__(self):
-    return str(self.number)
-
-  def __str__(self):
-    return repr(self)
-
 class _LeafNode(object):
   def __init__(self, start_line, end_line):
     self._start_line = start_line
@@ -727,7 +714,7 @@ class _TokenStream(object):
   '''
   def __init__(self, string):
     self.next_token = None
-    self.next_line = _Line(1)
+    self.next_line = 1
     self.next_column = 0
     self._string = string
     self._cursor = 0
@@ -738,7 +725,7 @@ class _TokenStream(object):
 
   def Advance(self):
     if self._cursor > 0 and self._string[self._cursor - 1] == '\n':
-      self.next_line = self.next_line.Next()
+      self.next_line += 1
       self.next_column = 0
     elif self.next_token is not None:
       self.next_column += len(self.next_token.text)
@@ -808,8 +795,8 @@ class Handlebar(object):
       raise ParseException('Template is empty')
     if tokens.HasNext():
       raise ParseException('There are still tokens remaining at %s, '
-                           'was there an end-section without a start-section?'
-                           % tokens.next_line)
+                           'was there an end-section without a start-section?' %
+                           tokens.next_line)
 
   def _ParseSection(self, tokens):
     nodes = []
