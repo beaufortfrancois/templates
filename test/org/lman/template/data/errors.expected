@@ -1,4 +1,3 @@
-
  will generate an error.
 bar will not.
 Failed to resolve '_.errors' at line 4 column 3 in &lt;root&gt;

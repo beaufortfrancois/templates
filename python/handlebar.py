@@ -14,8 +14,6 @@
 
 # TODO: New name, not "handlebar".
 # TODO: Escaping control characters somehow. e.g. \{{, \{{-.
-# TODO: Make a variable on a single line {{foo}} not print the line if it
-#       doesn't resolve to anything. Likewise comments and assertions.
 
 import json
 import re
@@ -260,7 +258,7 @@ class _RenderState(object):
     return RenderResult(self.text.ToString(), self._errors);
 
 class _Identifier(object):
-  ''' An identifier of the form '@', 'foo.bar.baz', or '@.foo.bar.baz'.
+  '''An identifier of the form '@', 'foo.bar.baz', or '@.foo.bar.baz'.
   '''
   def __init__(self, name, line, column):
     self.name = name
@@ -369,15 +367,18 @@ class _IndentedNode(_DecoratorNode):
   def Render(self, render_state):
     if isinstance(self._content, _CommentNode):
       return
-    content_render_state = render_state.Copy()
-    self._content.Render(content_render_state)
-    def AddIndentation(text):
+    def inlinify(text):
+      if len(text) == 0:  # avoid rendering a blank line
+        return ''
       buf = _StringBuilder()
       buf.Append(self._indent_str)
       buf.Append(text.replace('\n', '\n%s' % self._indent_str))
-      buf.Append('\n')
+      if not text.endswith('\n'):  # partials will often already end in a \n
+        buf.Append('\n')
       return buf.ToString()
-    render_state.Merge(content_render_state, text_transform=AddIndentation)
+    content_render_state = render_state.Copy()
+    self._content.Render(content_render_state)
+    render_state.Merge(content_render_state, text_transform=inlinify)
 
 class _BlockNode(_DecoratorNode):
   def __init__(self, content):
@@ -422,7 +423,7 @@ class _NodeCollection(object):
     return ''.join(str(node) for node in self._nodes)
 
 class _StringNode(object):
-  ''' Just a string.
+  '''Just a string.
   '''
   def __init__(self, string, start_line, end_line):
     self._string = string
@@ -468,7 +469,7 @@ class _StringNode(object):
     return self._string
 
 class _EscapedVariableNode(_LeafNode):
-  ''' {{foo}}
+  '''{{foo}}
   '''
   def __init__(self, id_):
     _LeafNode.__init__(self, id_.line, id_.line)
@@ -488,7 +489,7 @@ class _EscapedVariableNode(_LeafNode):
     return '{{%s}}' % self._id
 
 class _UnescapedVariableNode(_LeafNode):
-  ''' {{{foo}}}
+  '''{{{foo}}}
   '''
   def __init__(self, id_):
     _LeafNode.__init__(self, id_.line, id_.line)
@@ -519,7 +520,7 @@ class _CommentNode(_LeafNode):
     return '<comment>'
 
 class _SectionNode(_DecoratorNode):
-  ''' {{#foo}} ... {{/foo}}
+  '''{{#foo}} ... {{/foo}}
   '''
   def __init__(self, id_, content):
     _DecoratorNode.__init__(self, content)
@@ -544,7 +545,7 @@ class _SectionNode(_DecoratorNode):
         self._id, _DecoratorNode.__repr__(self), self._id)
 
 class _VertedSectionNode(_DecoratorNode):
-  ''' {{?foo}} ... {{/foo}}
+  '''{{?foo}} ... {{/foo}}
   '''
   def __init__(self, id_, content):
     _DecoratorNode.__init__(self, content)
@@ -570,7 +571,7 @@ class _VertedSectionNode(_DecoratorNode):
     return True
 
 class _InvertedSectionNode(_DecoratorNode):
-  ''' {{^foo}} ... {{/foo}}
+  '''{{^foo}} ... {{/foo}}
   '''
   def __init__(self, id_, content):
     _DecoratorNode.__init__(self, content)
@@ -586,7 +587,7 @@ class _InvertedSectionNode(_DecoratorNode):
         self._id, _DecoratorNode.__repr__(self), self._id)
 
 class _AssertionNode(_LeafNode):
-  ''' {{!foo Some comment about foo}}
+  '''{{!foo Some comment about foo}}
   '''
   def __init__(self, id_, description):
     _LeafNode.__init__(self, id_.line, id_.line)
@@ -601,7 +602,7 @@ class _AssertionNode(_LeafNode):
     return '{{!%s %s}}' % (self._id, self._description)
 
 class _JsonNode(_LeafNode):
-  ''' {{*foo}}
+  '''{{*foo}}
   '''
   def __init__(self, id_):
     _LeafNode.__init__(self, id_.line, id_.line)
@@ -618,7 +619,7 @@ class _JsonNode(_LeafNode):
     return '{{*%s}}' % self._id
 
 class _PartialNode(_LeafNode):
-  ''' {{+foo}}
+  '''{{+foo}}
   '''
   def __init__(self, id_):
     _LeafNode.__init__(self, id_.line, id_.line)
@@ -670,7 +671,7 @@ class _PartialNode(_LeafNode):
 _TOKENS = {}
 
 class _Token(object):
-  ''' The tokens that can appear in a template.
+  '''The tokens that can appear in a template.
   '''
   class Data(object):
     def __init__(self, name, text, clazz):
@@ -710,7 +711,7 @@ class _Token(object):
   CHARACTER                   = Data('CHARACTER'                  , '.'  , None)
 
 class _TokenStream(object):
-  ''' Tokeniser for template parsing.
+  '''Tokeniser for template parsing.
   '''
   def __init__(self, string):
     self.next_token = None
@@ -784,7 +785,7 @@ class _TokenStream(object):
     return repr(self)
 
 class Handlebar(object):
-  ''' A handlebar template.
+  '''A handlebar template.
   '''
   def __init__(self, template, name=None):
     self.source = template
@@ -828,8 +829,7 @@ class Handlebar(object):
           previous_node.TrimEndingSpaces()
         if next_node:
           next_node.TrimStartingNewLine()
-      elif (isinstance(node, _LeafNode) and
-            (not previous_node or previous_node.EndsWithEmptyLine()) and
+      elif ((not previous_node or previous_node.EndsWithEmptyLine()) and
             (not next_node or next_node.StartsWithNewLine())):
         indentation = 0
         if previous_node:

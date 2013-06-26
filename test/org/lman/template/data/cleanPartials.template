@@ -21,8 +21,7 @@ Even more funk:
     {{+partials.p1}}
 (woo).
 
-These should all be single lines; too hard to do it otherwise.
-This is more consistent too.
+These single-line sections should still render as blocks.
 {{?list}}{{+partials.p1}}{{/}}
   {{?list}}{{+partials.p1}}{{/}}
 
@@ -37,3 +36,4 @@ This is more consistent too.
 
 {{?list}}{{#list}}{{+partials.p1}}{{/}}{{/}}
   {{?list}}{{#list}}{{+partials.p1}}{{/}}{{/}}
+note: bug here, shouldn't be indented.

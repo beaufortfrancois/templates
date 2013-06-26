@@ -115,8 +115,8 @@ class HandlebarTest(unittest.TestCase):
       max_expected_line_length = max(len(line) for line in expected_lines)
       message = []
       while expected_lines or actual_lines:
-        expected_line = expected_lines.pop(0) if expected_lines else ''
-        actual_line = actual_lines.pop(0) if actual_lines else ''
+        expected_line = expected_lines.pop(0) if expected_lines else '%'
+        actual_line = actual_lines.pop(0) if actual_lines else '%'
         message.append(('%s %s%s | %s' % (
             ' ' if expected_line == actual_line else '!',
             expected_line,

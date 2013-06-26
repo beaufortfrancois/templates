@@ -13,23 +13,17 @@ Give me a 789 (seven eight nine).
 Give me an abc.
   {"value":"a"}
   a
-  
   {"value":"b"}
   b
-  
   {"value":"c"}
   c
-  
   Give me an abc.
     {"value":"a"}
     a
-    
     {"value":"b"}
     b
-    
     {"value":"c"}
     c
-    
 
 Should render blank lines between each of these:
   1
@@ -45,14 +39,16 @@ Should render blank lines between each of these:
     3
 
 
-Should render each inline:
-123
-  456
-
+Should render each on its own line:
+1
+2
+3
+  4
+  5
+  6
+  
 Nothing to see here.
 
 Nothing to see here either.
-
-  
 
 Done!

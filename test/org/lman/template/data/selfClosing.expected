@@ -8,10 +8,12 @@ Object list: 123.
 
 // Partials.
 Some partials:
-This is a partial.arg1: foo valuearg2: bar value
-
-
-This is a partial.arg1: arg2: 
+This is a partial.
+arg1: foo value
+arg2: bar value
+This is a partial.
+arg1: 
+arg2: 
 
 // JSON.
 Some JSON: -[1,2,3] - - -[1,2,3]

@@ -39,19 +39,55 @@ Even more funk:
     Three
 (woo).
 
-These should all be single lines; too hard to do it otherwise.
-This is more consistent too.
-One  TwoThree
-  One  TwoThree
-
+These single-line sections should still render as blocks.
+One
+  Two
+Three
+  One
+    Two
+  Three
+  
 a One  TwoThree
   a One  TwoThree
 
-One  TwoThreeOne  TwoThreeOne  TwoThree
-  One  TwoThreeOne  TwoThreeOne  TwoThree
-
+One
+  Two
+Three
+One
+  Two
+Three
+One
+  Two
+Three
+  One
+    Two
+  Three
+  One
+    Two
+  Three
+  One
+    Two
+  Three
+  
 a One  TwoThreea One  TwoThreea One  TwoThree
   a One  TwoThreea One  TwoThreea One  TwoThree
 
-One  TwoThreeOne  TwoThreeOne  TwoThree
-  One  TwoThreeOne  TwoThreeOne  TwoThree
+One
+  Two
+Three
+One
+  Two
+Three
+One
+  Two
+Three
+  One
+    Two
+  Three
+  One
+    Two
+  Three
+  One
+    Two
+  Three
+  note: bug here, shouldn't be indented.

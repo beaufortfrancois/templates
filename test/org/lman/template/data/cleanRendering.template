@@ -33,7 +33,7 @@ Should render blank lines between each of these:
 
   {{/}}
 
-Should render each inline:
+Should render each on its own line:
 {{#list1}}{{@}}{{/}}
   {{#list2}}{{@}}{{/}}
 
