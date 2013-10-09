@@ -59,8 +59,9 @@ class RenderResult(object):
     self.errors = errors
 
   def __repr__(self):
-    return '%s(text=%s, errors=%s)' % (
-        self.__class__.__name__, self.text, self.errors)
+    return '%s(text=%s, errors=%s)' % (type(self).__name__,
+                                       self.text,
+                                       self.errors)
 
   def __str__(self):
     return repr(self)
@@ -776,10 +777,9 @@ class _TokenStream(object):
       self.Advance()
 
   def __repr__(self):
-    return '%s(next_token=%s, remainder=%s)' % (
-        self.__class__.__name__,
-        self.next_token,
-        self._string[self._cursor:])
+    return '%s(next_token=%s, remainder=%s)' % (type(self).__name__,
+                                                self.next_token,
+                                                self._string[self._cursor:])
 
   def __str__(self):
     return repr(self)
@@ -982,8 +982,14 @@ class Handlebar(object):
   def render(self, *contexts):
     return self.Render(*contexts)
 
+  def __eq__(self, other):
+    return self.source == other.source and self._name == other._name
+
+  def __ne__(self, other):
+    return not (self == other)
+
   def __repr__(self):
-    return str('%s(%s)' % (self.__class__.__name__, self._top_node))
+    return str('%s(%s)' % (type(self).__name__, self._top_node))
 
   def __str__(self):
     return repr(self)
