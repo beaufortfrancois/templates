@@ -2,9 +2,9 @@
 Some boolean values -{{?t value/}} -{{?f value/}} -{{?t object.x/}} -{{?f object.x/}}.
 Inverted: -{{^t value/}} -{{^f value/}} -{{^t object.x/}} -{{^f object.x/}}.
 Other conditions: -{{?value value/}} -{{^value value/}}.
-List: -{{#list @/}} -{{#list value/}}.
-Object: -{{#object x/}} -{{?object object.x/}} -{{^object object.x/}}.
-Object list: {{#objectList @.x/}}.
+List: -{{#at:list at/}} -{{#list value/}}.
+Object: -{{#o:object o.x/}} -{{?object object.x/}} -{{^object object.x/}}.
+Object list: {{#at:objectList at.x/}}.
 
 // Partials.
 Some partials:

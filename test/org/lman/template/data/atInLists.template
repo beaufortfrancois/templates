@@ -1,26 +1,26 @@
 Expanded lists:
-{{#foo}}
-* This won't render because it's not prefixed by @: {{bar}}.
-* This will: {{@.bar}}.
+{{#at:foo}}
+* This won't render because it's not prefixed by at: {{bar}}.
+* This will: {{at.bar}}.
 * Partial won't pass on the current scope: {{+partials.one}}.
 * Nor this: {{+partials.one arg:bar}}.
-* This one will: {{+partials.one arg:@.bar}}.
+* This one will: {{+partials.one arg:at.bar}}.
 {{/foo}}
 
 Inline lists:
 * Without args: {{#foo +partials.one /}}.
-* With non-@ arg: {{#foo +partials.one arg:bar /}}.
-* With @ arg: {{#foo +partials.one arg:@.bar /}}.
+* With non-at arg: {{#foo +partials.one arg:bar /}}.
+* With at arg: {{#at:foo +partials.one arg:at.bar /}}.
 
 Inheriting lists:
-{{#foo}}
-{{#@.inner}}
-* This should take its value from the inner list: {{@.bar}}.
-{{/@.inner}}
-* Templates can explicitly scope @ if they want to access things further up.
-{{#@}}
-{{#inner}}
-* First comes from foo, the other from inner: {{bar}}, {{@.bar}}.
-{{/inner}}
-{{/@}}
+{{#at:foo}}
+{{#at:at.inner}}
+* This should take its value from the inner list: {{at.bar}}.
+{{/at.inner}}
+* Templates can explicitly scope at if they want to access things further up.
+{{#at}}
+{{#at2:at.inner}}
+* First comes from foo, the other from inner: {{at.bar}}, {{at2.bar}}.
+{{/at.inner}}
+{{/at}}
 {{/foo}}

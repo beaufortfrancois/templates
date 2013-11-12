@@ -1,4 +1,4 @@
 hello
-{{#one}}{{foo}} {{bar}}{{/one}}
-{{#two}}{{foo}} {{bar}}{{/two}}
+{{#o:one}}{{o.foo}} {{o.bar}}{{/one}}
+{{#t:two}}{{t.foo}} {{t.bar}}{{/two}}
 goodbye

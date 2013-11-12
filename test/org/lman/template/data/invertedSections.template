@@ -4,9 +4,9 @@
 {{/flats}}
 {{?baz}}
   two
-  {{#flats}}{{@.foo}}{{@.bar}}{{/flats}}
+  {{#at:flats}}{{at.foo}}{{at.bar}}{{/flats}}
 {{/baz}}
 {{^baz}}
   three
-  {{#flats}}{{@.foo}}{{@.bar}}{{/flats}}
+  {{#at:flats}}{{at.foo}}{{at.bar}}{{/flats}}
 {{/baz}}

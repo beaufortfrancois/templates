@@ -1,15 +1,15 @@
 On separate lines:
-{{#inner}}
-  {{@}}
+{{#at:inner}}
+  {{at}}
 {{/}}
 ...
-  {{#inner}}
-    {{@}}
+  {{#at:inner}}
+    {{at}}
   {{/}}
 On a single line:
-{{#inner}}{{@}}{{/}}
+{{#at:inner}}{{at}}{{/}}
 ...
-  {{#inner}}{{@}}{{/}}
+  {{#at:inner}}{{at}}{{/}}
 Not found:
 {{?notFound}}
   Nothing to see here.

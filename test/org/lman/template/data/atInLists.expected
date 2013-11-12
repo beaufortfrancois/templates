@@ -1,10 +1,10 @@
 Expanded lists:
-* This won't render because it's not prefixed by @: .
+* This won't render because it's not prefixed by at: .
 * This will: 10.
 * Partial won't pass on the current scope: .
 * Nor this: .
 * This one will: 10.
-* This won't render because it's not prefixed by @: .
+* This won't render because it's not prefixed by at: .
 * This will: 20.
 * Partial won't pass on the current scope: .
 * Nor this: .
@@ -12,17 +12,17 @@ Expanded lists:
 
 Inline lists:
 * Without args: .
-* With non-@ arg: .
-* With @ arg: 1020.
+* With non-at arg: .
+* With at arg: 1020.
 
 Inheriting lists:
 * This should take its value from the inner list: 100.
 * This should take its value from the inner list: 110.
-* Templates can explicitly scope @ if they want to access things further up.
+* Templates can explicitly scope at if they want to access things further up.
 * First comes from foo, the other from inner: 10, 100.
 * First comes from foo, the other from inner: 10, 110.
 * This should take its value from the inner list: 200.
 * This should take its value from the inner list: 210.
-* Templates can explicitly scope @ if they want to access things further up.
+* Templates can explicitly scope at if they want to access things further up.
 * First comes from foo, the other from inner: 20, 200.
 * First comes from foo, the other from inner: 20, 210.

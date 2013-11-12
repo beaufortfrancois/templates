@@ -4,14 +4,14 @@ Partials should inherit only the global state of contexts.
 arg:arg1: {{+partials.p1 arg:arg1}}
 arg:arg2: {{+partials.p1 arg:arg2}}
 
-{{#deep}}
+{{#d:deep}}
  no args: {{+partials.p1}}
 arg:arg1: {{+partials.p1 arg:arg1}}
-arg:arg2: {{+partials.p1 arg:arg2}}
+arg:arg2: {{+partials.p1 arg:d.arg2}}
 
-{{#moreDeep}}
+{{#md:d.moreDeep}}
  no args: {{+partials.p1}}
 arg:arg1: {{+partials.p1 arg:arg1}}
-arg:arg2: {{+partials.p1 arg:arg2}}
-{{/moreDeep}}
+arg:arg2: {{+partials.p1 arg:d.arg2}}
+{{/d.moreDeep}}
 {{/deep}}

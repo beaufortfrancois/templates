@@ -1,41 +1,41 @@
 Give me a one two three.
-{{#list1}}
-  {{@}}
+{{#at:list1}}
+  {{at}}
 {{/}}
   Give me a four five six.
-  {{#list2}}
-    {{@}}
+  {{#at:list2}}
+    {{at}}
   {{/}}
 
-Give me a {{#list3}}{{@}}{{/}} (seven eight nine).
-  Give me a {{#list4}}{{@}}{{/}} (TEN!).
+Give me a {{#at:list3}}{{at}}{{/}} (seven eight nine).
+  Give me a {{#at:list4}}{{at}}{{/}} (TEN!).
 
 Give me an abc.
-{{#list5}}
-  {{*@}}
-  {{@.value}}
+{{#at:list5}}
+  {{*at}}
+  {{at.value}}
   {{value}}
 {{/}}
   Give me an abc.
-  {{#list5}}
-    {{*@}}
-    {{@.value}}
+  {{#at:list5}}
+    {{*at}}
+    {{at.value}}
     {{value}}
   {{/}}
 
 Should render blank lines between each of these:
-{{#list1}}
-  {{@}}
+{{#at:list1}}
+  {{at}}
 
 {{/}}
-  {{#list1}}
-    {{@}}
+  {{#at:list1}}
+    {{at}}
 
   {{/}}
 
 Should render each on its own line:
-{{#list1}}{{@}}{{/}}
-  {{#list2}}{{@}}{{/}}
+{{#at:list1}}{{at}}{{/}}
+  {{#at:list2}}{{at}}{{/}}
 
 Nothing to see here.
 {{#nothing1}}
