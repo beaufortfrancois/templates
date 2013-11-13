@@ -30,6 +30,8 @@ class HandlebarTest(unittest.TestCase):
     self._Run('atInLists', partials=('one',), expect_errors=True)
   def testAssertions(self):
     self._Run('assertions', expect_errors=True)
+  def testBlockPartials(self):
+    self._Run('blockPartials', partials=('wrapper',))
   def testCleanPartials(self):
     self._Run('cleanPartials', partials=('p1', 'p2'))
   def testCleanRendering(self):
@@ -108,7 +110,7 @@ class HandlebarTest(unittest.TestCase):
       data['partials'] = partial_data
     result = Handlebar(template).Render(data)
     if not expect_errors and result.errors:
-      self.fail(''.join(result.errors))
+      self.fail('\n'.join(result.errors))
     if expected != result.text:
       expected_lines = expected.replace('\n', '$\n').split('\n')
       actual_lines = result.text.replace('\n', '$\n').split('\n')

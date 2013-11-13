@@ -1,39 +1,39 @@
-Inline partials should get squashed down: {{+partials.p1}}.
+Inline partials should get squashed down: {{+partials.p1 /}}.
 
 The same partial on its own line shouldn't get squashed down:
-{{+partials.p1}}
+{{+partials.p1 /}}
 (and shouldn't add any new lines before or after).
 
 More funkiness when they're adjacent:
-{{+partials.p1}}
-{{+partials.p1}}
-{{+partials.p1}}
+{{+partials.p1 /}}
+{{+partials.p1 /}}
+{{+partials.p1 /}}
 (woo).
 
 Partials should be indented on the level that they're included:
-  {{+partials.p1}}
+  {{+partials.p1 /}}
 (still no newlines).
 
 Even more funk:
-  {{+partials.p1}}
-    {{+partials.p1}}
-  {{+partials.p1}}
-    {{+partials.p1}}
+  {{+partials.p1 /}}
+    {{+partials.p1 /}}
+  {{+partials.p1 /}}
+    {{+partials.p1 /}}
 (woo).
 
 These single-line sections should still render as blocks.
-{{?list}}{{+partials.p1}}{{/}}
-  {{?list}}{{+partials.p1}}{{/}}
+{{?list}}{{+partials.p1 /}}{{/}}
+  {{?list}}{{+partials.p1 /}}{{/}}
 
-{{?list}}a {{+partials.p1}}{{/}}
-  {{?list}}a {{+partials.p1}}{{/}}
+{{?list}}a {{+partials.p1 /}}{{/}}
+  {{?list}}a {{+partials.p1 /}}{{/}}
 
-{{#list}}{{+partials.p1}}{{/}}
-  {{#list}}{{+partials.p1}}{{/}}
+{{#list}}{{+partials.p1 /}}{{/}}
+  {{#list}}{{+partials.p1 /}}{{/}}
 
-{{#list}}a {{+partials.p1}}{{/}}
-  {{#list}}a {{+partials.p1}}{{/}}
+{{#list}}a {{+partials.p1 /}}{{/}}
+  {{#list}}a {{+partials.p1 /}}{{/}}
 
-{{?list}}{{#list}}{{+partials.p1}}{{/}}{{/}}
-  {{?list}}{{#list}}{{+partials.p1}}{{/}}{{/}}
+{{?list}}{{#list}}{{+partials.p1 /}}{{/}}{{/}}
+  {{?list}}{{#list}}{{+partials.p1 /}}{{/}}{{/}}
 note: bug here, shouldn't be indented.

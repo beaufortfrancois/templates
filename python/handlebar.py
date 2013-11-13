@@ -299,7 +299,9 @@ class _Identifier(object):
   def __str__(self):
     return repr(self)
 
-class _LeafNode(object):
+class _Node(object): pass
+
+class _LeafNode(_Node):
   def __init__(self, start_line, end_line):
     self._start_line = start_line
     self._end_line = end_line
@@ -328,7 +330,7 @@ class _LeafNode(object):
   def __str__(self):
     return repr(self)
 
-class _DecoratorNode(object):
+class _DecoratorNode(_Node):
   def __init__(self, content):
     self._content = content
 
@@ -399,7 +401,7 @@ class _BlockNode(_DecoratorNode):
   def Render(self, render_state):
     self._content.Render(render_state)
 
-class _NodeCollection(object):
+class _NodeCollection(_Node):
   def __init__(self, nodes):
     assert nodes
     self._nodes = nodes
@@ -432,7 +434,7 @@ class _NodeCollection(object):
   def __repr__(self):
     return ''.join(str(node) for node in self._nodes)
 
-class _StringNode(object):
+class _StringNode(_Node):
   '''Just a string.
   '''
   def __init__(self, string, start_line, end_line):
@@ -642,56 +644,62 @@ class _JsonNode(_LeafNode):
     return '{{*%s}}' % self._id
 
 class _PartialNode(_LeafNode):
-  '''{{+foo}}
+  '''{{+var:foo}} ... {{/foo}}
   '''
-  def __init__(self, id_):
+  def __init__(self, bind_to, id_, content):
     _LeafNode.__init__(self, id_.line, id_.line)
+    self._bind_to = bind_to
     self._id = id_
+    self._content = content
     self._args = None
-    self._pass_through_ids = None
+    self._pass_through_id = None
+
+  @classmethod
+  def Inline(cls, id_):
+    return cls(None, id_, None)
 
   def Render(self, render_state):
     value = render_state.contexts.Resolve(self._id.name)
     if value is None:
       render_state.AddResolutionError(self._id)
       return
-    if not isinstance(value, Handlebar):
-      render_state.AddResolutionError(self._id)
+    if not isinstance(value, (Handlebar, _Node)):
+      render_state.AddResolutionError(self._id, description='not a partial')
       return
 
-    partial_render_state = render_state.ForkPartial(value._name, self._id)
+    if isinstance(value, Handlebar):
+      node, name = value._top_node, value._name
+    else:
+      node, name = value, None
+
+    partial_render_state = render_state.ForkPartial(name, self._id)
 
     arg_context = {}
-    # Implicit arguments.
-    if self._pass_through_ids is not None:
-      for pass_through_id in self._pass_through_ids:
-        context = render_state.contexts.Resolve(pass_through_id.name)
-        if context is not None:
-          arg_context[pass_through_id.name] = context
-    # Explicit arguments.
+    if self._pass_through_id is not None:
+      context = render_state.contexts.Resolve(self._pass_through_id.name)
+      if context is not None:
+        arg_context[self._pass_through_id.name] = context
     if self._args is not None:
       for key, value_id in self._args.items():
         context = render_state.contexts.Resolve(value_id.name)
         if context is not None:
           arg_context[key] = context
+    if self._bind_to and self._content:
+      arg_context[self._bind_to.name] = self._content
     if arg_context:
       partial_render_state.contexts.Push(arg_context)
 
-    value._top_node.Render(partial_render_state)
+    node.Render(partial_render_state)
 
     render_state.Merge(
         partial_render_state,
         text_transform=lambda text: text[:-1] if text.endswith('\n') else text)
 
-  def AddArgument(self, key, id_):
-    if self._args is None:
-      self._args = {}
-    self._args[key] = id_
+  def SetArguments(self, args):
+    self._args = args
 
   def PassThroughArgument(self, id_):
-    if self._pass_through_ids is None:
-      self._pass_through_ids = []
-    self._pass_through_ids.append(id_)
+    self._pass_through_id = id_
 
   def __repr__(self):
     return '{{+%s}}' % self._id
@@ -799,6 +807,8 @@ class _TokenStream(object):
     return self
 
   def AdvanceOver(self, token):
+    if not self.next_token:
+      raise ParseException('Reached EOF but expected %s' % token.name)
     if self.next_token is not token:
       raise ParseException(
           'Expecting token %s but got %s at line %s' % (token.name,
@@ -907,27 +917,23 @@ class Handlebar(object):
     elif next_token in (_Token.OPEN_VARIABLE,
                         _Token.OPEN_UNESCAPED_VARIABLE,
                         _Token.OPEN_JSON):
-      tokens.Advance()
       # Inline nodes that don't take arguments.
+      tokens.Advance()
       close_token = (_Token.CLOSE_MUSTACHE3
                      if next_token is _Token.OPEN_UNESCAPED_VARIABLE else
                      _Token.CLOSE_MUSTACHE)
       id_ = self._NextIdentifier(tokens)
       tokens.AdvanceOver(close_token)
       return [next_token.clazz(id_)]
-    elif next_token in (_Token.OPEN_ASSERTION,
-                        _Token.OPEN_PARTIAL):
-      # Inline node that take arguments.
+    elif next_token is _Token.OPEN_ASSERTION:
+      # Inline nodes that take arguments.
       tokens.Advance()
       id_ = self._NextIdentifier(tokens)
-      if next_token == _Token.OPEN_ASSERTION:
-        node = next_token.clazz(id_, tokens.AdvanceOverNextString())
-      else:
-        node = next_token.clazz(id_)
-        self._ParsePartialNodeArgs(node, tokens)
+      node = next_token.clazz(id_, tokens.AdvanceOverNextString())
       tokens.AdvanceOver(_Token.CLOSE_MUSTACHE)
       return [node]
-    elif next_token in (_Token.OPEN_START_SECTION,
+    elif next_token in (_Token.OPEN_PARTIAL,
+                        _Token.OPEN_START_SECTION,
                         _Token.OPEN_START_VERTED_SECTION,
                         _Token.OPEN_START_INVERTED_SECTION):
       # Block nodes, though they may have inline syntax like {{#foo bar /}}.
@@ -939,21 +945,34 @@ class Handlebar(object):
         # is producing, not the identifier of where to find that content.
         tokens.AdvanceOver(_Token.CHARACTER)
         bind_to, id_ = id_, self._NextIdentifier(tokens)
-      if tokens.next_token is not _Token.CLOSE_MUSTACHE:
-        # Inline syntax. Support select node types: variables, partials, JSON.
-        line, column = (tokens.next_line, tokens.next_column + 1)
+      partial_args = None
+      if next_token is _Token.OPEN_PARTIAL:
+        partial_args = self._ParsePartialNodeArgs(tokens)
+        if tokens.next_token is not _Token.CLOSE_MUSTACHE:
+          # Inline syntax for partial types.
+          if bind_to is not None:
+            raise ParseException(
+                'Cannot bind %s to a self-closing partial' % bind_to)
+          tokens.AdvanceOver(_Token.INLINE_END_SECTION)
+          partial_node = _PartialNode.Inline(id_)
+          partial_node.SetArguments(partial_args)
+          return [partial_node]
+      elif tokens.next_token is not _Token.CLOSE_MUSTACHE:
+        # Inline syntax for non-partial types. Support select node types:
+        # variables, partials, JSON.
+        line, column = tokens.next_line, (tokens.next_column + 1)
         name = tokens.AdvanceToNextWhitespace()
         clazz = _UnescapedVariableNode
         if name.startswith('*'):
           clazz = _JsonNode
         elif name.startswith('+'):
-          clazz = _PartialNode
+          clazz = _PartialNode.Inline
         if clazz is not _UnescapedVariableNode:
           name = name[1:]
           column += 1
         inline_node = clazz(_Identifier(name, line, column))
-        if clazz is _PartialNode:
-          self._ParsePartialNodeArgs(inline_node, tokens)
+        if isinstance(inline_node, _PartialNode):
+          inline_node.SetArguments(self._ParsePartialNodeArgs(tokens))
           if bind_to is not None:
             inline_node.PassThroughArgument(bind_to)
         tokens.SkipWhitespace()
@@ -971,7 +990,10 @@ class Handlebar(object):
       self._CloseSection(tokens, id_)
       nodes = []
       if section is not None:
-        nodes.append(next_token.clazz(bind_to, id_, section))
+        node = next_token.clazz(bind_to, id_, section)
+        if partial_args:
+          node.SetArguments(partial_args)
+        nodes.append(node)
       if else_section is not None:
         nodes.append(else_node_class(bind_to, id_, else_section))
       return nodes
@@ -1007,12 +1029,14 @@ class Handlebar(object):
           'Start section %s doesn\'t match else %s' % (id_, next_string))
     tokens.AdvanceOver(_Token.CLOSE_MUSTACHE)
 
-  def _ParsePartialNodeArgs(self, partial_node, tokens):
+  def _ParsePartialNodeArgs(self, tokens):
+    args = {}
     tokens.SkipWhitespace()
     while tokens.next_token is _Token.CHARACTER:
       key = tokens.AdvanceOverNextString(excluded=':')
       tokens.Advance()
-      partial_node.AddArgument(key, self._NextIdentifier(tokens))
+      args[key] = self._NextIdentifier(tokens)
+    return args or None
 
   def _NextIdentifier(self, tokens):
     tokens.SkipWhitespace()

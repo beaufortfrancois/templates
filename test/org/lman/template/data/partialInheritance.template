@@ -1,17 +1,17 @@
 Partials should inherit only the global state of contexts.
 
- no args: {{+partials.p1}}
-arg:arg1: {{+partials.p1 arg:arg1}}
-arg:arg2: {{+partials.p1 arg:arg2}}
+ no args: {{+partials.p1 /}}
+arg:arg1: {{+partials.p1 arg:arg1 /}}
+arg:arg2: {{+partials.p1 arg:arg2 /}}
 
 {{#d:deep}}
- no args: {{+partials.p1}}
-arg:arg1: {{+partials.p1 arg:arg1}}
-arg:arg2: {{+partials.p1 arg:d.arg2}}
+ no args: {{+partials.p1 /}}
+arg:arg1: {{+partials.p1 arg:arg1 /}}
+arg:arg2: {{+partials.p1 arg:d.arg2 /}}
 
 {{#md:d.moreDeep}}
- no args: {{+partials.p1}}
-arg:arg1: {{+partials.p1 arg:arg1}}
-arg:arg2: {{+partials.p1 arg:d.arg2}}
+ no args: {{+partials.p1 /}}
+arg:arg1: {{+partials.p1 arg:arg1 /}}
+arg:arg2: {{+partials.p1 arg:d.arg2 /}}
 {{/d.moreDeep}}
 {{/deep}}

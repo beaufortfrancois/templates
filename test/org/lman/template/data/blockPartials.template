@@ -1,0 +1,20 @@
+{{+content:partials.wrapper}}
+This content is passed to |wrapper| mapped to content.
+{{/partials.wrapper}}
+
+{{+content:partials.wrapper fruit:apple}}
+Likewise, but this time there's a |fruit| argument.
+It can't be accessed from here {{?fruit}}OOPS{{/}} but the outer scope can still be
+accessed ({{apple}}).
+{{/partials.wrapper}}
+
+{{#veggies}}
+{{+content:partials.wrapper}}
+{{- TODO: fix this. The partial needs to pass its local context on. -}}
+Here, the context from |veggies| should give us access to {{- carrot -}}.
+{{/partials.wrapper}}
+{{/veggies}}
+
+{{+content:partials.wrapper}}
+And look! The wrapper is passing us back a {{veg}}.
+{{/partials.wrapper}}

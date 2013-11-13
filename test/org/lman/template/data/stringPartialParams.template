@@ -1,2 +1,2 @@
-{{+partials.p1 partial:partials.p2}}
-{{+partials.p2}}
+{{+partials.p1 partial:partials.p2 /}}
+{{+partials.p2 /}}

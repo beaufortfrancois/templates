@@ -1,0 +1,18 @@
+Wrapping:
+
+This content is passed to |wrapper| mapped to content.
+
+Wrapping:
+
+Likewise, but this time there's a |fruit| argument.
+It can't be accessed from here  but the outer scope can still be
+accessed (yummy apple).
+With yummy apple!
+
+Wrapping:
+
+Here, the context from |veggies| should give us access to .
+
+Wrapping:
+
+And look! The wrapper is passing us back a yummy carrot.

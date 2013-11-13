@@ -2,9 +2,9 @@ Expanded lists:
 {{#at:foo}}
 * This won't render because it's not prefixed by at: {{bar}}.
 * This will: {{at.bar}}.
-* Partial won't pass on the current scope: {{+partials.one}}.
-* Nor this: {{+partials.one arg:bar}}.
-* This one will: {{+partials.one arg:at.bar}}.
+* Partial won't pass on the current scope: {{+partials.one /}}.
+* Nor this: {{+partials.one arg:bar /}}.
+* This one will: {{+partials.one arg:at.bar /}}.
 {{/foo}}
 
 Inline lists:
