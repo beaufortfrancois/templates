@@ -168,8 +168,8 @@ class _Contexts(object):
       found = found.get(part)
     return found
 
-  def Scope(self, key, value, fn, *args):
-    self.Push({key: value})
+  def Scope(self, context, fn, *args):
+    self.Push(context)
     try:
       return fn(*args)
     finally:
@@ -288,7 +288,7 @@ class _Identifier(object):
     message.Append('Failed to resolve %s in %s\n' % (self.GetDescription(),
                                                      name))
     if stack is not None:
-      for entry in stack.entries:
+      for entry in reversed(stack.entries):
         message.Append('  included as %s in %s\n' % (entry.id_.GetDescription(),
                                                      entry.name))
     return message.ToString().strip()
@@ -544,16 +544,16 @@ class _SectionNode(_DecoratorNode):
     if isinstance(value, list):
       for item in value:
         if self._bind_to is not None:
-          render_state.contexts.Scope(self._bind_to.name, item,
+          render_state.contexts.Scope({self._bind_to.name: item},
                                       self._content.Render, render_state)
         else:
           self._content.Render(render_state)
     elif hasattr(value, 'get'):
       if self._bind_to is not None:
-        render_state.contexts.Scope(self._bind_to.name, value,
+        render_state.contexts.Scope({self._bind_to.name: value},
                                     self._content.Render, render_state)
       else:
-        self._content.Render(render_state)
+        render_state.contexts.Scope(value, self._content.Render, render_state)
     else:
       render_state.AddResolutionError(self._id)
 
@@ -573,7 +573,7 @@ class _VertedSectionNode(_DecoratorNode):
     value = render_state.contexts.Resolve(self._id.name)
     if _VertedSectionNode.ShouldRender(value):
       if self._bind_to is not None:
-        render_state.contexts.Scope(self._bind_to.name, value,
+        render_state.contexts.Scope({self._bind_to.name: value},
                                     self._content.Render, render_state)
       else:
         self._content.Render(render_state)
@@ -806,14 +806,16 @@ class _TokenStream(object):
     self._cursor += len(self.next_token.text)
     return self
 
-  def AdvanceOver(self, token):
+  def AdvanceOver(self, token, description=None):
+    parse_error = None
     if not self.next_token:
-      raise ParseException('Reached EOF but expected %s' % token.name)
-    if self.next_token is not token:
-      raise ParseException(
-          'Expecting token %s but got %s at line %s' % (token.name,
-                                                        self.next_token.name,
-                                                        self.next_line))
+      parse_error = 'Reached EOF but expected %s' % token.name
+    elif self.next_token is not token:
+      parse_error = 'Expecting token %s but got %s at line %s' % (
+                     token.name, self.next_token.name, self.next_line)
+    if parse_error:
+      parse_error += ' %s' % description or ''
+      raise ParseException(parse_error)
     return self.Advance()
 
   def AdvanceOverNextString(self, excluded=''):
@@ -1014,7 +1016,8 @@ class Handlebar(object):
       tokens.Advance()
 
   def _CloseSection(self, tokens, id_):
-    tokens.AdvanceOver(_Token.OPEN_END_SECTION)
+    tokens.AdvanceOver(_Token.OPEN_END_SECTION,
+                       description='to match %s' % id_.GetDescription())
     next_string = tokens.AdvanceOverNextString()
     if next_string != '' and next_string != id_.name:
       raise ParseException(
