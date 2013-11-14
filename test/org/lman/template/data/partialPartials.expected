@@ -1,0 +1,22 @@
+This tests partials that are passed an incomplete set of arguments bound to
+local variables.
+
+Rendering in outer context:
+-> bound to the same name
+I am rendering partial (a=outer a, b=outer b) now.
+-> bound to swapped names
+I am rendering partial (a=outer b, b=outer a) now.
+
+Rendering in inner context with pre-bound variables:
+-> bound to the same name
+I am rendering partial (a=inner a, b=inner b) now.
+-> bound to swapped names
+I am rendering partial (a=inner b, b=inner a) now.
+
+Rendering in inner context with post-bound variables:
+-> bound to the same name
+(a=inner a, b=inner b)
+-> bound to swapped names
+(a=inner b, b=inner a)
+
+Done.

@@ -1,0 +1,26 @@
+This tests partials that are passed an incomplete set of arguments bound to
+local variables.
+
+Rendering in outer context:
+-> bound to the same name
+{{+partials.one moo:(partials.two a:a b:b) /}}
+-> bound to swapped names
+{{+partials.one moo:(partials.two a:b b:a) /}}
+
+{{#c}}
+Rendering in inner context with pre-bound variables:
+-> bound to the same name
+{{+partials.one moo:(partials.two a:a b:b) /}}
+-> bound to swapped names
+{{+partials.one moo:(partials.two a:b b:a) /}}
+{{/c}}
+
+{{#c}}
+Rendering in inner context with post-bound variables:
+-> bound to the same name
+{{+partials.two a:a b:b /}}
+-> bound to swapped names
+{{+partials.two a:b b:a /}}
+{{/c}}
+
+Done.

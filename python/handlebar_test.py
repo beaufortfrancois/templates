@@ -83,6 +83,8 @@ class HandlebarTest(unittest.TestCase):
     self._Run('optionalEndSectionName')
   def testPartialInheritance(self):
     self._Run('partialInheritance', partials=('p1',), expect_errors=True)
+  def testPartialPartials(self):
+    self._Run('partialPartials', partials=('one', 'two'), expect_errors=True)
   def testPaths(self):
     self._Run('paths')
   def testSelfClosing(self):

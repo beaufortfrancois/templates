@@ -1,0 +1,8 @@
+{
+  "a": "outer a",
+  "b": "outer b",
+  "c": {
+    "a": "inner a",
+    "b": "inner b"
+  }
+}

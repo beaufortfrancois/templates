@@ -651,6 +651,7 @@ class _PartialNode(_LeafNode):
     self._bind_to = bind_to
     self._id = id_
     self._content = content
+    self._resolved_args = None
     self._args = None
     self._pass_through_id = None
 
@@ -679,11 +680,26 @@ class _PartialNode(_LeafNode):
       context = render_state.contexts.Resolve(self._pass_through_id.name)
       if context is not None:
         arg_context[self._pass_through_id.name] = context
+    if self._resolved_args is not None:
+      arg_context.update(self._resolved_args)
     if self._args is not None:
-      for key, value_id in self._args.items():
-        context = render_state.contexts.Resolve(value_id.name)
-        if context is not None:
-          arg_context[key] = context
+      def resolve_args(args):
+        resolved = {}
+        for key, value in args.iteritems():
+          if isinstance(value, dict):
+            assert len(value.keys()) == 1
+            inner_id, inner_args = value.items()[0]
+            inner_partial = render_state.contexts.Resolve(inner_id.name)
+            if inner_partial is not None:
+              context = _PartialNode(None, inner_id, inner_partial)
+              context.SetResolvedArguments(resolve_args(inner_args))
+              resolved[key] = context
+          else:
+            context = render_state.contexts.Resolve(value.name)
+            if context is not None:
+              resolved[key] = context
+        return resolved
+      arg_context.update(resolve_args(self._args))
     if self._bind_to and self._content:
       arg_context[self._bind_to.name] = self._content
     if arg_context:
@@ -694,6 +710,9 @@ class _PartialNode(_LeafNode):
     render_state.Merge(
         partial_render_state,
         text_transform=lambda text: text[:-1] if text.endswith('\n') else text)
+
+  def SetResolvedArguments(self, args):
+    self._resolved_args = args
 
   def SetArguments(self, args):
     self._args = args
@@ -817,6 +836,17 @@ class _TokenStream(object):
       parse_error += ' %s' % description or ''
       raise ParseException(parse_error)
     return self.Advance()
+
+  def AdvanceOverSeparator(self, char, description=None):
+    self.SkipWhitespace()
+    next_char = self.NextCharacter()
+    if next_char != char:
+      parse_error = 'Expected \'%s\'. got \'%s\'' % (char, next_char)
+      if description is not None:
+        parse_error += ' (%s)' % description
+      raise ParseException(parse_error)
+    self.AdvanceOver(_Token.CHARACTER)
+    self.SkipWhitespace()
 
   def AdvanceOverNextString(self, excluded=''):
     start = self._cursor - len(self.next_token.text)
@@ -945,7 +975,7 @@ class Handlebar(object):
         # This section has the format {{#bound:id}} as opposed to just {{id}}.
         # That is, |id_| is actually the identifier to bind what the section
         # is producing, not the identifier of where to find that content.
-        tokens.AdvanceOver(_Token.CHARACTER)
+        tokens.AdvanceOverSeparator(':')
         bind_to, id_ = id_, self._NextIdentifier(tokens)
       partial_args = None
       if next_token is _Token.OPEN_PARTIAL:
@@ -1035,16 +1065,24 @@ class Handlebar(object):
   def _ParsePartialNodeArgs(self, tokens):
     args = {}
     tokens.SkipWhitespace()
-    while tokens.next_token is _Token.CHARACTER:
+    while (tokens.next_token is _Token.CHARACTER and
+           tokens.NextCharacter() != ')'):
       key = tokens.AdvanceOverNextString(excluded=':')
-      tokens.Advance()
-      args[key] = self._NextIdentifier(tokens)
+      tokens.AdvanceOverSeparator(':')
+      if tokens.NextCharacter() == '(':
+        tokens.AdvanceOverSeparator('(')
+        inner_id = self._NextIdentifier(tokens)
+        inner_args = self._ParsePartialNodeArgs(tokens)
+        tokens.AdvanceOverSeparator(')')
+        args[key] = {inner_id: inner_args}
+      else:
+        args[key] = self._NextIdentifier(tokens)
     return args or None
 
   def _NextIdentifier(self, tokens):
     tokens.SkipWhitespace()
     column_start = tokens.next_column + 1
-    id_ = _Identifier(tokens.AdvanceOverNextString(excluded=' \n\r\t:'),
+    id_ = _Identifier(tokens.AdvanceOverNextString(excluded=' \n\r\t:()'),
                       tokens.next_line,
                       column_start)
     tokens.SkipWhitespace()
