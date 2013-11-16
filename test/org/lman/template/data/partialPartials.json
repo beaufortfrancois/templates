@@ -4,5 +4,6 @@
   "c": {
     "a": "inner a",
     "b": "inner b"
-  }
+  },
+  "hello": "outer hello"
 }

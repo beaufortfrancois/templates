@@ -1,1 +1,1 @@
-I am rendering partial {{+moo/}} now.
+I am rendering partial {{+moo d:hello /}} now.

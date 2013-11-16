@@ -18,9 +18,9 @@ Rendering in inner context with pre-bound variables:
 {{#c}}
 Rendering in inner context with post-bound variables:
 -> bound to the same name
-{{+partials.two a:a b:b /}}
+{{+partials.two a:a b:b d:hello /}}
 -> bound to swapped names
-{{+partials.two a:b b:a /}}
+{{+partials.two a:b b:a d:hello /}}
 {{/c}}
 
 Done.
