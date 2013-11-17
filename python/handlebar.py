@@ -155,6 +155,11 @@ class _Contexts(object):
       # [0] is the stack of nodes that |found_key| has been found in.
       self._value_info[found_key][0].pop()
 
+  def FirstLocal(self):
+    if len(self._nodes) == self._first_local:
+      return None
+    return self._nodes[-1]._value
+
   def Resolve(self, path):
     # This method is only efficient at finding |key|; if |tail| has a value (and
     # |key| evaluates to an indexable value) we'll need to descend into that.
@@ -657,6 +662,29 @@ class _PartialNodeWithArguments(_DecoratorNode):
   def Render(self, render_state):
     render_state.contexts.Scope(self._args, self._partial.Render, render_state)
 
+class _PartialNodeInContext(_DecoratorNode):
+  def __init__(self, partial, context):
+    if isinstance(partial, Handlebar):
+      # Preserve any get() method that the caller has added.
+      if hasattr(partial, 'get'):
+        self.get = partial.get
+      partial = partial._top_node
+    _DecoratorNode.__init__(self, partial)
+    self._partial = partial
+    self._context = context
+
+  def Render(self, render_state):
+    original_contexts = render_state.contexts
+    try:
+      render_state.contexts = self._context
+      render_state.contexts.Scope(
+          # The first local context of |original_contexts| will be the
+          # arguments that were passed to the partial, if any.
+          original_contexts.FirstLocal() or {},
+          self._partial.Render, render_state)
+    finally:
+      render_state.contexts = original_contexts
+
 class _PartialNode(_LeafNode):
   '''{{+var:foo}} ... {{/foo}}
   '''
@@ -711,7 +739,8 @@ class _PartialNode(_LeafNode):
         return resolved
       arg_context.update(resolve_args(self._args))
     if self._bind_to and self._content:
-      arg_context[self._bind_to.name] = self._content
+      arg_context[self._bind_to.name] = _PartialNodeInContext(
+          self._content, render_state.contexts)
     if arg_context:
       partial_render_state.contexts.Push(arg_context)
 

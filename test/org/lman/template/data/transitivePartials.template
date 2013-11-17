@@ -1,0 +1,6 @@
+{{#context}}
+Outer content says "hello": {{hello}}.
+{{+content:partials.p1}}
+Inner content which uses variable from context "hello": {{hello}}.
+{{/partials.p1}}
+{{/context}}

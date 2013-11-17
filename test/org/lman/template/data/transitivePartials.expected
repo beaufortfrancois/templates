@@ -1,0 +1,4 @@
+Outer content says "hello": world.
+Rendering p1...
+
+Inner content which uses variable from context "hello": world.

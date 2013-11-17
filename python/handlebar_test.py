@@ -93,6 +93,8 @@ class HandlebarTest(unittest.TestCase):
     self._Run('stringPartialParams', partials=('p1', 'p2'))
   def testThis(self):
     self._Run('this')
+  def testTransitivePartials(self):
+    self._Run('transitivePartials', partials=('p1',))
   def testValidIds(self):
     self._Run('validIds')
 
