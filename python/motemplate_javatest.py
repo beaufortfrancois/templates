@@ -14,7 +14,7 @@
 
 import json as json_lib
 import sys
-from handlebar import Handlebar
+from motemplate import Motemplate
 
 """ Python counterpart to PythonHandlebarTest.
 """
@@ -28,13 +28,13 @@ def readFile(path):
     return f.read()
 
 json = json_lib.loads(readFile(argv[1]))
-template = Handlebar(readFile(argv[2]))
+template = Motemplate(readFile(argv[2]))
 
 partials = {}
 for partialPath in argv[3:]:
   partialName = partialPath.split('/')[-1]
   partialName = partialName[:len(partialName) - len('.template')]
-  partials[partialName] = Handlebar(readFile(partialPath))
+  partials[partialName] = Motemplate(readFile(partialPath))
 
 renderResult = template.render(json, { 'partials': partials })
 sys.stdout.write(renderResult.text)

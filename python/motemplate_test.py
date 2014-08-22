@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from handlebar import Handlebar
+from motemplate import Motemplate
 import json
 import os
 import sys
@@ -25,7 +25,7 @@ def _Read(name):
   with open(os.path.join(test_data, name), 'r') as f:
     return f.read()
 
-class HandlebarTest(unittest.TestCase):
+class MotemplateTest(unittest.TestCase):
   def testAtInLists(self):
     self._Run('atInLists', partials=('one',), expect_errors=True)
   def testAssertions(self):
@@ -109,10 +109,10 @@ class HandlebarTest(unittest.TestCase):
     if partials is not None:
       partial_data = {}
       for partial in partials:
-        partial_data[partial] = Handlebar(
+        partial_data[partial] = Motemplate(
             _Read('%s_%s.template' % (name, partial)))
       data['partials'] = partial_data
-    result = Handlebar(template).Render(data)
+    result = Motemplate(template).Render(data)
     if not expect_errors and result.errors:
       self.fail('\n'.join(result.errors))
     if expected != result.text:
