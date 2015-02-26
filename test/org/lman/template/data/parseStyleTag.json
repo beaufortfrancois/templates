@@ -1,0 +1,8 @@
+{
+  "guests": [{
+    "name": "Ben",
+    "favorites": {
+      "food": "Spaghetti"
+    }
+  }]
+}

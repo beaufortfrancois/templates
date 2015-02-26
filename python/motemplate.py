@@ -813,18 +813,24 @@ class _Token(object):
       'OPEN_VARIABLE'              , '{{' , _EscapedVariableNode)
   CLOSE_MUSTACHE = Data(
       'CLOSE_MUSTACHE'             , '}}' , None)
+  OPEN_STYLE_TAG = Data(
+      'OPEN_STYLE_TAG'        , '<style>' , None)
+  CLOSE_STYLE_TAG = Data(
+      'CLOSE_STYLE_TAG'       , '</style>', None)
   CHARACTER = Data(
       'CHARACTER'                  , '.'  , None)
 
 class _TokenStream(object):
   '''Tokeniser for template parsing.
   '''
-  def __init__(self, string):
+  def __init__(self, string, parseStyleTag=False):
     self.next_token = None
     self.next_line = 1
     self.next_column = 0
     self._string = string
     self._cursor = 0
+    self._last_non_character_token = None
+    self._parse_style_tag = parseStyleTag
     self.Advance()
 
   def HasNext(self):
@@ -848,14 +854,22 @@ class _TokenStream(object):
       return None
     assert self._cursor < len(self._string)
 
+    if self._parse_style_tag:
+      self.next_token = (
+          _TOKENS.get(self._string[self._cursor:self._cursor+7]) or
+          _TOKENS.get(self._string[self._cursor:self._cursor+8]))
+
     if (self._cursor + 1 < len(self._string) and
-        self._string[self._cursor + 1] in '{}'):
+        self._string[self._cursor + 1] in '{}' and
+        self._last_non_character_token is not _Token.OPEN_STYLE_TAG):
       self.next_token = (
           _TOKENS.get(self._string[self._cursor:self._cursor+3]) or
           _TOKENS.get(self._string[self._cursor:self._cursor+2]))
 
     if self.next_token is None:
       self.next_token = _Token.CHARACTER
+    else:
+      self._last_non_character_token = self.next_token
 
     self._cursor += len(self.next_token.text)
     return self
@@ -912,10 +926,10 @@ class _TokenStream(object):
 class Motemplate(object):
   '''A motemplate template.
   '''
-  def __init__(self, template, name=None):
+  def __init__(self, template, name=None, parseStyleTag=False):
     self.source = template
     self._name = name
-    tokens = _TokenStream(template)
+    tokens = _TokenStream(template, parseStyleTag)
     self._top_node = self._ParseSection(tokens)
     if not self._top_node:
       raise ParseException('Template is empty')
@@ -1069,6 +1083,10 @@ class Motemplate(object):
       start_line = tokens.next_line
       self._AdvanceOverComment(tokens)
       return [_CommentNode(start_line, tokens.next_line)]
+    elif next_token in (_Token.OPEN_STYLE_TAG, _Token.CLOSE_STYLE_TAG):
+      start_line = tokens.next_line
+      tokens.Advance()
+      return [_StringNode(next_token.text, start_line, tokens.next_line)]
 
   def _AdvanceOverComment(self, tokens):
     tokens.AdvanceOver(_Token.OPEN_COMMENT)

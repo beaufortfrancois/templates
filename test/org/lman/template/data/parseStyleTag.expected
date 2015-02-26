@@ -1,0 +1,11 @@
+<html>
+<style>
+@media only screen and (max-width: 580px){.button{margin:20px 0}}
+</style>
+<style>@media only screen and (max-width: 580px){.button{margin:20px 0}}</style>
+<h1>Party shopping list</h1>
+<ul>
+  <li>Ben - Spaghetti</li>
+</ul>
+<style>@media only screen and (max-width: 580px){.button{margin:20px 0}}</style>
+</html>
