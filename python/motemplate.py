@@ -758,7 +758,28 @@ class _PartialNode(_LeafNode):
   def __repr__(self):
     return '{{+%s}}' % self._id
 
-_TOKENS = {}
+class _TokenSet(object):
+  '''Set of tokens that can appear in a template.
+  '''
+
+  def __init__(self):
+    self._tokens = []
+    self._needs_sorting = False
+
+  def Add(self, token):
+    self._tokens.append(token)
+    self._needs_sorting = True
+
+  def IterTokens(self):
+    '''Yields every token from longest to shortest.
+    '''
+    if self._needs_sorting:
+      self._tokens.sort(key=lambda token: len(token.text), reverse=True)
+    self._needs_sorting = False
+    for token in self._tokens:
+      yield token
+
+_TOKENS = _TokenSet()
 
 class _Token(object):
   '''The tokens that can appear in a template.
@@ -768,7 +789,7 @@ class _Token(object):
       self.name = name
       self.text = text
       self.clazz = clazz
-      _TOKENS[text] = self
+      _TOKENS.Add(self)
 
     def ElseNodeClass(self):
       if self.clazz == _VertedSectionNode:
@@ -829,8 +850,8 @@ class _TokenStream(object):
     self.next_column = 0
     self._string = string
     self._cursor = 0
-    self._last_non_character_token = None
     self._preserve_style_tag = preserve_style_tag
+    self._set_character = False
     self.Advance()
 
   def HasNext(self):
@@ -854,22 +875,22 @@ class _TokenStream(object):
       return None
     assert self._cursor < len(self._string)
 
-    if self._preserve_style_tag:
-      self.next_token = (
-          _TOKENS.get(self._string[self._cursor:self._cursor+7]) or
-          _TOKENS.get(self._string[self._cursor:self._cursor+8]))
-
-    if (self._cursor + 1 < len(self._string) and
-        self._string[self._cursor + 1] in '{}' and
-        self._last_non_character_token is not _Token.OPEN_STYLE_TAG):
-      self.next_token = (
-          _TOKENS.get(self._string[self._cursor:self._cursor+3]) or
-          _TOKENS.get(self._string[self._cursor:self._cursor+2]))
+    for token in _TOKENS.IterTokens():
+      # style tags are just plain text if their content isn't preserved.
+      if (not self._preserve_style_tag and
+          token in (_Token.OPEN_STYLE_TAG, _Token.CLOSE_STYLE_TAG)):
+        continue
+      if self._string.startswith(token.text, self._cursor):
+        if token is _Token.CLOSE_STYLE_TAG:
+          self._set_character = False
+        if not self._set_character:
+          self.next_token = token
+        if token is _Token.OPEN_STYLE_TAG:
+          self._set_character = True
+        break
 
     if self.next_token is None:
       self.next_token = _Token.CHARACTER
-    else:
-      self._last_non_character_token = self.next_token
 
     self._cursor += len(self.next_token.text)
     return self
