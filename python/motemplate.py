@@ -925,6 +925,12 @@ class _TokenStream(object):
 
 class Motemplate(object):
   '''A motemplate template.
+
+  Attributes:
+    template: A template string.
+    name: An optional template name string.
+    preserve_style_tag: A boolean indicating if the content of <style> tags is
+                        preserved.
   '''
   def __init__(self, template, name=None, preserve_style_tag=False):
     self.source = template
