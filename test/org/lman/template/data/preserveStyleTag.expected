@@ -1,11 +1,9 @@
 <html>
 <style>
 @media only screen and (max-width: 580px){.button{margin:20px 0}}
+{{name}}
 </style>
 <style>@media only screen and (max-width: 580px){.button{margin:20px 0}}</style>
-<h1>Party shopping list</h1>
-<ul>
-  <li>Ben - Spaghetti</li>
-</ul>
+<h1>My name is Ben</h1>
 <style>@media only screen and (max-width: 580px){.button{margin:20px 0}}</style>
 </html>

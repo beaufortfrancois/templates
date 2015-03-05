@@ -1,13 +1,9 @@
 <html>
 <style>
 @media only screen and (max-width: 580px){.button{margin:20px 0}}
+{{name}}
 </style>
 <style>@media only screen and (max-width: 580px){.button{margin:20px 0}}</style>
-<h1>Party shopping list</h1>
-<ul>
-{{#guest:guests}}
-  <li>{{guest.name}} - {{guest.favorites.food}}</li>
-{{/guests}}
-</ul>
+<h1>My name is {{name}}</h1>
 <style>@media only screen and (max-width: 580px){.button{margin:20px 0}}</style>
 </html>
