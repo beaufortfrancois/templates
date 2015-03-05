@@ -823,14 +823,14 @@ class _Token(object):
 class _TokenStream(object):
   '''Tokeniser for template parsing.
   '''
-  def __init__(self, string, parseStyleTag=False):
+  def __init__(self, string, preserve_style_tag=False):
     self.next_token = None
     self.next_line = 1
     self.next_column = 0
     self._string = string
     self._cursor = 0
     self._last_non_character_token = None
-    self._parse_style_tag = parseStyleTag
+    self._preserve_style_tag = preserve_style_tag
     self.Advance()
 
   def HasNext(self):
@@ -854,7 +854,7 @@ class _TokenStream(object):
       return None
     assert self._cursor < len(self._string)
 
-    if self._parse_style_tag:
+    if self._preserve_style_tag:
       self.next_token = (
           _TOKENS.get(self._string[self._cursor:self._cursor+7]) or
           _TOKENS.get(self._string[self._cursor:self._cursor+8]))
@@ -926,10 +926,10 @@ class _TokenStream(object):
 class Motemplate(object):
   '''A motemplate template.
   '''
-  def __init__(self, template, name=None, parseStyleTag=False):
+  def __init__(self, template, name=None, preserve_style_tag=False):
     self.source = template
     self._name = name
-    tokens = _TokenStream(template, parseStyleTag)
+    tokens = _TokenStream(template, preserve_style_tag)
     self._top_node = self._ParseSection(tokens)
     if not self._top_node:
       raise ParseException('Template is empty')

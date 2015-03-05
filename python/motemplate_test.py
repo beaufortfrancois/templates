@@ -97,10 +97,10 @@ class MotemplateTest(unittest.TestCase):
     self._Run('transitivePartials', partials=('p1',))
   def testValidIds(self):
     self._Run('validIds')
-  def testParseStyleTag(self):
-    self._Run('parseStyleTag', parse_style_tag=True)
+  def testPreserveStyleTag(self):
+    self._Run('preserveStyleTag', preserve_style_tag=True)
 
-  def _Run(self, name, instance=None, parse_style_tag=False, partials=None,
+  def _Run(self, name, instance=None, preserve_style_tag=False, partials=None,
            expect_errors=False):
     template = _Read('%s.template' % name)
     if instance is None:
@@ -115,7 +115,7 @@ class MotemplateTest(unittest.TestCase):
         partial_data[partial] = Motemplate(
             _Read('%s_%s.template' % (name, partial)))
       data['partials'] = partial_data
-    result = Motemplate(template, parseStyleTag=parse_style_tag).Render(data)
+    result = Motemplate(template, preserve_style_tag=preserve_style_tag).Render(data)
     if not expect_errors and result.errors:
       self.fail('\n'.join(result.errors))
     if expected != result.text:
