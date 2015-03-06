@@ -115,7 +115,8 @@ class MotemplateTest(unittest.TestCase):
         partial_data[partial] = Motemplate(
             _Read('%s_%s.template' % (name, partial)))
       data['partials'] = partial_data
-    result = Motemplate(template, preserve_style_tag=preserve_style_tag).Render(data)
+    result = Motemplate(template,
+                        preserve_style_tag=preserve_style_tag).Render(data)
     if not expect_errors and result.errors:
       self.fail('\n'.join(result.errors))
     if expected != result.text:
